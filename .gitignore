@@ -1,2 +1,2 @@
-uploads/
-test_docs/
+server/uploads/*
+server/test_docs/*
