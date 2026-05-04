@@ -10,7 +10,7 @@
               <span class="stat-label">用户总数</span>
               <span class="stat-value">{{ stats.user_count }}</span>
             </div>
-            <el-icon class="stat-icon" :size="48" color="#409eff"><User /></el-icon>
+            <el-icon class="stat-icon" :size="48" color="#0d9488"><User /></el-icon>
           </div>
         </el-card>
       </el-col>
@@ -21,7 +21,7 @@
               <span class="stat-label">知识库数量</span>
               <span class="stat-value">{{ stats.kb_count }}</span>
             </div>
-            <el-icon class="stat-icon" :size="48" color="#67c23a"><FolderOpened /></el-icon>
+            <el-icon class="stat-icon" :size="48" color="#14b8a6"><FolderOpened /></el-icon>
           </div>
         </el-card>
       </el-col>
@@ -32,7 +32,7 @@
               <span class="stat-label">文档总数</span>
               <span class="stat-value">{{ stats.doc_count }}</span>
             </div>
-            <el-icon class="stat-icon" :size="48" color="#e6a23c"><Document /></el-icon>
+            <el-icon class="stat-icon" :size="48" color="#0ea5e9"><Document /></el-icon>
           </div>
         </el-card>
       </el-col>
@@ -43,7 +43,7 @@
               <span class="stat-label">今日提问</span>
               <span class="stat-value">{{ stats.today_chat_count }}</span>
             </div>
-            <el-icon class="stat-icon" :size="48" color="#f56c6c"><ChatDotRound /></el-icon>
+            <el-icon class="stat-icon" :size="48" color="#f97316"><ChatDotRound /></el-icon>
           </div>
         </el-card>
       </el-col>
@@ -135,12 +135,12 @@ function renderTrendChart() {
       data: counts,
       areaStyle: {
         color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-          { offset: 0, color: 'rgba(64, 158, 255, 0.3)' },
-          { offset: 1, color: 'rgba(64, 158, 255, 0.05)' }
+          { offset: 0, color: 'rgba(13, 148, 136, 0.35)' },
+          { offset: 1, color: 'rgba(13, 148, 136, 0.04)' }
         ])
       },
-      lineStyle: { color: '#409eff', width: 2 },
-      itemStyle: { color: '#409eff' }
+      lineStyle: { color: '#0d9488', width: 2 },
+      itemStyle: { color: '#14b8a6' }
     }]
   })
 }
@@ -164,6 +164,7 @@ function renderPieChart() {
       right: '5%',
       top: 'center'
     },
+    color: ['#0d9488', '#14b8a6', '#2dd4bf', '#5eead4', '#0ea5e9', '#64748b', '#f97316'],
     series: [{
       type: 'pie',
       radius: ['40%', '70%'],
@@ -204,7 +205,13 @@ onBeforeUnmount(() => {
 }
 
 .stat-card {
-  border-radius: 8px;
+  border-radius: 12px;
+  border: 1px solid var(--eq-card-border, rgba(13, 148, 136, 0.12));
+  overflow: hidden;
+}
+
+.stat-card :deep(.el-card__body) {
+  padding: 20px 22px;
 }
 
 .stat-content {
@@ -221,23 +228,28 @@ onBeforeUnmount(() => {
 
 .stat-label {
   font-size: 14px;
-  color: #909399;
+  color: #64748b;
 }
 
 .stat-value {
   font-size: 28px;
   font-weight: 700;
-  color: #303133;
+  color: #0f172a;
+  letter-spacing: -0.03em;
 }
 
 .stat-icon {
   opacity: 0.8;
 }
 
+.home-container :deep(.el-card) {
+  border: 1px solid var(--eq-card-border, rgba(13, 148, 136, 0.12));
+}
+
 .card-title {
   font-weight: 600;
   font-size: 15px;
-  color: #303133;
+  color: #0f172a;
 }
 
 .chart-box {

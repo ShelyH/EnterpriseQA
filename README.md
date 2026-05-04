@@ -2,6 +2,8 @@
 
 基于 **Vue 3 + Flask + MySQL + Chroma** 的企业内部知识库管理与智能问答。管理员可维护知识库与文档，登录用户可选择知识库进行 **RAG（检索增强生成）** 对话。
 
+
+
 ---
 
 ## 功能概览
@@ -50,7 +52,7 @@ cd EnterpriseQA
 在 MySQL 中执行初始化脚本（二选一即可）：
 
 - `server/sql/init.sql` — 建库、建表、测试账号与示例数据
-- 或 `数据库脚本/db_enterprise_qa.sql`（若与仓库中脚本一致）
+- 或 `initsql/db_enterprise_qa.sql`（若与仓库中脚本一致）
 
 默认逻辑库名：**db_enterprise_qa**。若你的 MySQL 端口不是 **3306**，请在后端环境变量中设置 `MYSQL_PORT`（脚本注释中曾示例 3308，以实际为准）。
 
@@ -150,7 +152,7 @@ EnterpriseQA/
 │   ├── sql/init.sql        # 数据库初始化
 │   ├── chroma_data/        # Chroma 持久化（运行后生成，可配置路径）
 │   └── uploads/            # 上传文件存储
-├── 数据库脚本/             # 备用 SQL
+├── initsql/             # 备用 SQL
 └── README.md
 ```
 
@@ -179,7 +181,14 @@ EnterpriseQA/
    确认已安装 `chromadb` 与 `langchain-chroma`，且 `CHROMA_PERSIST_DIR` 对运行用户可写。
 
 ---
-
+## 系统界面
+![img.png](img/img.png)
+![img_1.png](img/img_1.png)
 ## 许可证与致谢
 
 具体许可证以仓库为准。本项目使用 LangChain、Chroma、HuggingFace 等开源组件；LLM 服务以你所配置的兼容接口为准。
+
+本项目演示视频来自哔哩哔哩：[BV1HhAGzhELw](https://www.bilibili.com/video/BV1HhAGzhELw)。
+
+
+

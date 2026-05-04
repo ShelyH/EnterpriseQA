@@ -5,10 +5,37 @@
   box-sizing: border-box;
 }
 
+/* 与登录页一致的青绿主题（覆盖 Element Plus 主色） */
+:root {
+  --eq-accent: #0d9488;
+  --eq-accent-light: #14b8a6;
+  --eq-accent-muted: #5eead4;
+  --eq-surface: #f0f7f6;
+  --eq-card-border: rgba(13, 148, 136, 0.12);
+
+  --el-color-primary: #0d9488;
+  --el-color-primary-light-3: #4db8ae;
+  --el-color-primary-light-5: #78cabf;
+  --el-color-primary-light-7: #a3dcd4;
+  --el-color-primary-light-8: #b9e5df;
+  --el-color-primary-light-9: #d9f0ec;
+  --el-color-primary-dark-2: #0b7b71;
+}
+
 html, body, #app {
   width: 100%;
   height: 100%;
   font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif;
+}
+
+/* 管理后台卡片略统一圆角 */
+.el-card {
+  border-radius: 12px;
+}
+
+/* 列表页工具栏与表格卡片描边 */
+.page-container > .el-card {
+  border: 1px solid var(--eq-card-border);
 }
 
 /* 滚动条美化 */
@@ -18,8 +45,12 @@ html, body, #app {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #c0c4cc;
+  background: rgba(13, 148, 136, 0.35);
   border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(13, 148, 136, 0.55);
 }
 
 ::-webkit-scrollbar-track {

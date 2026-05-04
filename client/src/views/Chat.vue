@@ -36,14 +36,14 @@
       <!-- 消息列表 -->
       <div class="chat-messages" ref="messagesRef">
         <div v-if="messages.length === 0" class="welcome">
-          <el-icon :size="64" color="#c0c4cc"><ChatDotSquare /></el-icon>
+          <el-icon :size="64" class="welcome-icon"><ChatDotSquare /></el-icon>
           <h3>欢迎使用企业知识库问答系统</h3>
           <p>请从左侧选择知识库，然后输入您的问题</p>
         </div>
         <ChatMessage v-for="(msg, i) in messages" :key="i" :message="msg" />
         <!-- 加载中提示 -->
         <div v-if="asking" class="loading-msg">
-          <el-avatar :size="36" :icon="Monitor" style="background-color: #67c23a" />
+          <el-avatar :size="36" :icon="Monitor" class="loading-avatar" />
           <div class="loading-bubble">
             <span class="loading-dot">思考中</span>
             <el-icon class="is-loading"><Loading /></el-icon>
@@ -179,26 +179,28 @@ onMounted(() => loadKBList())
   display: flex;
   height: calc(100vh - 100px);
   background: #fff;
-  border-radius: 8px;
+  border-radius: 14px;
   overflow: hidden;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--eq-card-border, rgba(13, 148, 136, 0.12));
+  box-shadow: 0 8px 30px rgba(15, 23, 42, 0.06);
 }
 
 /* 左侧知识库选择栏 */
 .chat-sidebar {
   width: 260px;
-  border-right: 1px solid #ebeef5;
+  border-right: 1px solid rgba(13, 148, 136, 0.12);
   display: flex;
   flex-direction: column;
-  background: #fafafa;
+  background: linear-gradient(180deg, #f8fcfb 0%, #f0f7f6 100%);
 }
 
 .sidebar-title {
   padding: 16px 20px;
-  font-weight: 600;
+  font-weight: 700;
   font-size: 15px;
-  color: #303133;
-  border-bottom: 1px solid #ebeef5;
+  color: #0f172a;
+  border-bottom: 1px solid rgba(13, 148, 136, 0.1);
+  letter-spacing: -0.02em;
 }
 
 .kb-list {
@@ -219,12 +221,13 @@ onMounted(() => loadKBList())
 }
 
 .kb-item:hover {
-  background: #ecf5ff;
+  background: rgba(13, 148, 136, 0.1);
 }
 
 .kb-item.active {
-  background: #409eff;
+  background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
   color: #fff;
+  box-shadow: 0 6px 16px rgba(13, 148, 136, 0.35);
 }
 
 .kb-item.active .el-tag {
@@ -257,17 +260,19 @@ onMounted(() => loadKBList())
 
 .chat-header {
   padding: 14px 20px;
-  border-bottom: 1px solid #ebeef5;
+  border-bottom: 1px solid rgba(13, 148, 136, 0.1);
   font-size: 14px;
-  font-weight: 500;
-  color: #303133;
+  font-weight: 600;
+  color: #0f172a;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  background: linear-gradient(180deg, #ffffff 0%, #fafdfc 100%);
 }
 
 .chat-header .hint {
-  color: #909399;
+  color: #64748b;
+  font-weight: 500;
 }
 
 .chat-messages {
@@ -276,23 +281,28 @@ onMounted(() => loadKBList())
   padding: 24px;
 }
 
+.welcome-icon {
+  color: rgba(13, 148, 136, 0.45);
+}
+
 .welcome {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: #c0c4cc;
   gap: 12px;
 }
 
 .welcome h3 {
-  color: #909399;
+  color: #475569;
   font-size: 18px;
+  font-weight: 600;
 }
 
 .welcome p {
   font-size: 14px;
+  color: #94a3b8;
 }
 
 .loading-msg {
@@ -302,34 +312,50 @@ onMounted(() => loadKBList())
   margin-bottom: 20px;
 }
 
+.loading-avatar {
+  background: linear-gradient(135deg, #14b8a6, #0d9488) !important;
+}
+
 .loading-bubble {
-  background: #f4f4f5;
+  background: #ecfdf5;
+  border: 1px solid rgba(13, 148, 136, 0.15);
   padding: 12px 16px;
   border-radius: 12px;
   border-top-left-radius: 4px;
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #909399;
+  color: #64748b;
   font-size: 14px;
+}
+
+.loading-bubble :deep(.el-icon) {
+  color: #0d9488;
 }
 
 /* 输入区域 */
 .chat-input {
   padding: 16px 20px;
-  border-top: 1px solid #ebeef5;
+  border-top: 1px solid rgba(13, 148, 136, 0.1);
   display: flex;
   gap: 12px;
   align-items: flex-end;
-  background: #fff;
+  background: #fafdfc;
 }
 
 .chat-input :deep(.el-textarea__inner) {
-  border-radius: 8px;
+  border-radius: 10px;
+  border-color: rgba(13, 148, 136, 0.15);
+}
+
+.chat-input :deep(.el-textarea__inner:focus) {
+  border-color: #0d9488;
+  box-shadow: 0 0 0 1px rgba(13, 148, 136, 0.2);
 }
 
 .send-btn {
   height: 54px;
-  border-radius: 8px;
+  border-radius: 10px;
+  font-weight: 600;
 }
 </style>

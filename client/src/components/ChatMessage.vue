@@ -41,7 +41,7 @@ const isUser = computed(() => props.message.role === 'user')
 
 /** 头像样式 */
 const avatarStyle = computed(() => ({
-  backgroundColor: isUser.value ? '#409eff' : '#67c23a'
+  backgroundColor: isUser.value ? '#0d9488' : '#14b8a6'
 }))
 </script>
 
@@ -67,14 +67,16 @@ const avatarStyle = computed(() => ({
 }
 
 .user-bubble {
-  background: #409eff;
+  background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
   color: #fff;
   border-top-right-radius: 4px;
+  box-shadow: 0 4px 14px rgba(13, 148, 136, 0.25);
 }
 
 .ai-bubble {
-  background: #f4f4f5;
-  color: #303133;
+  background: #f0fdf9;
+  border: 1px solid rgba(13, 148, 136, 0.12);
+  color: #1e293b;
   border-top-left-radius: 4px;
 }
 
@@ -85,12 +87,12 @@ const avatarStyle = computed(() => ({
 .sources {
   margin-top: 10px;
   padding-top: 8px;
-  border-top: 1px solid #e4e7ed;
+  border-top: 1px solid rgba(13, 148, 136, 0.15);
 }
 
 .sources-title {
   font-size: 12px;
-  color: #909399;
+  color: #64748b;
   margin-bottom: 4px;
 }
 

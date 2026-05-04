@@ -159,26 +159,27 @@ onMounted(() => {
 
 .detail-label {
   font-weight: 600;
-  color: #303133;
+  color: #0f172a;
   white-space: nowrap;
   min-width: 70px;
 }
 
 .detail-value {
-  color: #606266;
+  color: #475569;
   line-height: 1.6;
   word-break: break-all;
 }
 
 .detail-value.question {
-  color: #409eff;
-  font-weight: 500;
+  color: #0d9488;
+  font-weight: 600;
 }
 
 .detail-value.answer {
-  background: #f5f7fa;
+  background: #f0fdf9;
+  border: 1px solid rgba(13, 148, 136, 0.12);
   padding: 12px;
-  border-radius: 6px;
+  border-radius: 10px;
   white-space: pre-wrap;
 }
 

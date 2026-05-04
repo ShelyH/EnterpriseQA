@@ -11,9 +11,6 @@
         :default-active="$route.path"
         :collapse="isCollapse"
         :router="true"
-        background-color="#304156"
-        text-color="#bfcbd9"
-        active-text-color="#409eff"
         class="aside-menu"
       >
         <!-- 管理员菜单 -->
@@ -114,9 +111,10 @@ function handleCommand(command) {
 }
 
 .aside {
-  background-color: #304156;
+  background: linear-gradient(180deg, #0f172a 0%, #134e4a 55%, #115e59 100%);
   transition: width 0.3s;
   overflow: hidden;
+  box-shadow: 4px 0 24px rgba(15, 23, 42, 0.18);
 }
 
 .logo {
@@ -124,28 +122,61 @@ function handleCommand(command) {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
+  color: #ecfdf5;
   gap: 8px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid rgba(94, 234, 212, 0.15);
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.logo .el-icon {
+  color: #5eead4;
 }
 
 .logo-text {
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   white-space: nowrap;
 }
 
 .aside-menu {
   border-right: none;
+  --el-menu-bg-color: transparent;
+  --el-menu-text-color: rgba(226, 232, 240, 0.88);
+  --el-menu-hover-text-color: #ecfdf5;
+  --el-menu-hover-bg-color: rgba(45, 212, 191, 0.12);
+  --el-menu-active-color: #5eead4;
+  background: transparent !important;
+}
+
+.aside-menu :deep(.el-menu-item) {
+  border-radius: 10px;
+  margin: 4px 8px;
+  width: calc(100% - 16px);
+}
+
+.aside-menu :deep(.el-menu-item.is-active) {
+  background: linear-gradient(
+    90deg,
+    rgba(13, 148, 136, 0.45) 0%,
+    rgba(13, 148, 136, 0.12) 100%
+  ) !important;
+  border-right: none;
+  box-shadow: inset 3px 0 0 #5eead4;
+}
+
+.aside-menu.el-menu--collapse :deep(.el-menu-item.is-active) {
+  box-shadow: none;
+  border-left: 3px solid #5eead4;
 }
 
 .header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid #ebeef5;
-  background: #fff;
-  padding: 0 20px;
+  border-bottom: 1px solid var(--eq-card-border);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fcfb 100%);
+  padding: 0 22px;
   height: 60px;
 }
 
@@ -158,29 +189,46 @@ function handleCommand(command) {
 .collapse-btn {
   font-size: 20px;
   cursor: pointer;
-  color: #606266;
+  color: #475569;
+  padding: 6px;
+  border-radius: 8px;
+  transition: background 0.2s, color 0.2s;
+}
+
+.collapse-btn:hover {
+  color: #0d9488;
+  background: rgba(13, 148, 136, 0.08);
 }
 
 .page-title {
   font-size: 16px;
-  font-weight: 500;
-  color: #303133;
+  font-weight: 600;
+  color: #0f172a;
+  letter-spacing: -0.02em;
 }
 
 .header-right .user-info {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 10px;
+  transition: background 0.2s;
+}
+
+.header-right .user-info:hover {
+  background: rgba(13, 148, 136, 0.08);
 }
 
 .username {
   font-size: 14px;
-  color: #606266;
+  color: #475569;
+  font-weight: 500;
 }
 
 .main {
-  background: #f0f2f5;
+  background: var(--eq-surface);
   padding: 20px;
   overflow-y: auto;
 }
