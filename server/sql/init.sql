@@ -20,8 +20,8 @@ DROP TABLE IF EXISTS t_user;
 CREATE TABLE t_user (
     id INT PRIMARY KEY AUTO_INCREMENT COMMENT '用户ID',
     username VARCHAR(50) NOT NULL UNIQUE COMMENT '用户名',
-    password VARCHAR(64) NOT NULL COMMENT '密码（MD5加密）',
-    nickname VARCHAR(50) DEFAULT '' COMMENT '昵称',
+    password VARCHAR(255) NOT NULL COMMENT '密码（MD5加密）',
+    nickname VARCHAR(128) DEFAULT '' COMMENT '昵称',
     role VARCHAR(10) NOT NULL DEFAULT 'user' COMMENT '角色：admin-管理员，user-普通用户',
     avatar VARCHAR(255) DEFAULT '' COMMENT '头像地址',
     status TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1-启用，0-禁用',

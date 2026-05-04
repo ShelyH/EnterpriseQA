@@ -4,6 +4,7 @@
 """
 import os
 
+
 class Config:
     """基础配置类"""
 
@@ -27,11 +28,6 @@ class Config:
     # JWT Token有效期（秒），默认24小时
     JWT_EXPIRATION = 86400
 
-    # Ollama配置
-    OLLAMA_BASE_URL = os.environ.get('OLLAMA_BASE_URL', 'http://localhost:11434')
-    OLLAMA_LLM_MODEL = os.environ.get('OLLAMA_LLM_MODEL', 'qwen3:4b')
-    OLLAMA_EMBED_MODEL = os.environ.get('OLLAMA_EMBED_MODEL', 'qwen3-embedding:4b')
-
     # ChromaDB持久化存储路径
     CHROMA_PERSIST_DIR = os.environ.get(
         'CHROMA_PERSIST_DIR',
@@ -44,12 +40,12 @@ class Config:
     ALLOWED_EXTENSIONS = {'txt', 'pdf', 'md', 'docx'}
 
     # 文档分块配置
-    CHUNK_SIZE = 500        # 每个分块的字符数
-    CHUNK_OVERLAP = 50      # 分块之间的重叠字符数
+    CHUNK_SIZE = 500  # 每个分块的字符数
+    CHUNK_OVERLAP = 50  # 分块之间的重叠字符数
 
     # 向量化批处理配置
-    EMBED_BATCH_SIZE = 10   # 每批发送给Ollama的分块数量
-    EMBED_MAX_RETRIES = 3   # 嵌入失败最大重试次数
+    EMBED_BATCH_SIZE = 10  # 每批发送给Ollama的分块数量
+    EMBED_MAX_RETRIES = 3  # 嵌入失败最大重试次数
 
     # RAG检索配置
-    RETRIEVER_TOP_K = 4     # 检索返回的相似文档数量
+    RETRIEVER_TOP_K = 4  # 检索返回的相似文档数量

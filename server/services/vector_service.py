@@ -5,11 +5,9 @@
 import os
 import time
 from flask import current_app
-from langchain_huggingface import HuggingFaceEmbeddings
-from ollama import Client as OllamaClient, ResponseError
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_ollama import OllamaEmbeddings
 from langchain_chroma import Chroma
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 
 class OllamaServiceError(Exception):
@@ -39,38 +37,6 @@ class VectorService:
         self.persist_dir = current_app.config['CHROMA_PERSIST_DIR']
         self.batch_size = current_app.config.get('EMBED_BATCH_SIZE', 10)
         self.max_retries = current_app.config.get('EMBED_MAX_RETRIES', 3)
-
-    def _check_ollama(self):
-        """
-        预检查Ollama服务可用性和嵌入模型是否就绪。
-        仅在"服务未启动"和"模型未安装"时硬拦截；
-        5xx等瞬时错误只记录警告，让后续重试机制处理。
-        :raises OllamaServiceError: 服务不可达或模型未安装时抛出
-        """
-        base_url = current_app.config['OLLAMA_BASE_URL']
-        model_name = current_app.config['OLLAMA_EMBED_MODEL']
-        client = OllamaClient(host=base_url)
-
-        try:
-            model_list = client.list()
-        except ConnectionError:
-            raise OllamaServiceError(
-                f'无法连接Ollama服务({base_url})，请确认Ollama已启动'
-            )
-        except ResponseError as e:
-            current_app.logger.warning(
-                f'Ollama预检查返回异常(status {e.status_code})，将继续尝试向量化: {e}'
-            )
-            return
-        except Exception as e:
-            current_app.logger.warning(f'Ollama预检查失败，将继续尝试向量化: {e}')
-            return
-
-        installed = {m.get('name', '') for m in model_list.get('models', [])}
-        if not any(model_name in name or name in model_name for name in installed):
-            raise OllamaServiceError(
-                f'嵌入模型 {model_name} 未安装，请先执行: ollama pull {model_name}'
-            )
 
     def _get_collection_name(self, kb_id):
         """

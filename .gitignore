@@ -1,5 +1,6 @@
 server/uploads/*
 server/test_docs/*
+venv/
 # Logs
 logs
 *.log
