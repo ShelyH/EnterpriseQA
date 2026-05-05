@@ -8,13 +8,13 @@
 
 ## 功能概览
 
-| 模块 | 说明 |
-|------|------|
-| 用户与权限 | JWT 登录；角色 **admin**（管理后台、文档维护）与 **user**（问答与历史） |
-| 知识库 | 创建/启用知识库；文档上传 **txt / pdf / md / docx** |
+| 模块 | 说明                                                               |
+|------|------------------------------------------------------------------|
+| 用户与权限 | JWT 登录；角色 **admin**（管理后台、文档维护）与 **user**（问答与历史）                  |
+| 知识库 | 创建/启用知识库；文档上传 **txt / pdf / md / docx**                          |
 | 向量检索 | **Chroma** 持久化存储；嵌入模型 **BAAI/bge-small-zh-v1.5**（本地 HuggingFace） |
-| 问答 | **LangChain** RAG；LLM 通过 OpenAI 兼容接口调用（默认 **小米 Mimo**） |
-| 管理后台 | 数据统计图表（ECharts） |
+| 问答 | **LangChain** RAG；LLM 通过 OpenAI 兼容接口调用（默认 **DEEPSEEK**）          |
+| 管理后台 | 数据统计图表（ECharts）                                                  |
 
 ---
 
@@ -32,7 +32,7 @@
 - Python **3.10+**（推荐 3.11）
 - Node.js **18+**
 - MySQL **8.x**
-- 调用 LLM 所需的 **MIMO_API_KEY**（或改为自建 OpenAI 兼容服务后配置对应变量）
+- 调用 LLM 所需的 **DEEPSEEK_API_KEY**（或改为自建 OpenAI 兼容服务后配置对应变量）
 
 **说明**：嵌入模型首次运行会从 HuggingFace 下载，耗时取决于网络；有 NVIDIA GPU 时可在 `server/services/vector_service.py` 中将 `device` 改为 `"cuda"` 以加速向量化。
 
@@ -62,16 +62,16 @@ cd EnterpriseQA
 
 在运行 Flask 前设置（Windows 可用「系统环境变量」或启动前 `set` / PowerShell `$env:...`）：
 
-| 变量 | 说明 |
-|------|------|
-| `MIMO_API_KEY` | **必填**，小米 Mimo OpenAI 兼容接口的 API Key |
-| `MIMO_BASE_URL` | 可选，默认 `https://token-plan-cn.xiaomimimo.com/v1` |
-| `MIMO_MODEL` | 可选，默认 `mimo-v2.5-pro` |
-| `MIMO_MAX_TOKENS` | 可选，默认 `2048` |
-| `MIMO_TEMPERATURE` | 可选，默认 `0.5` |
-| `MYSQL_HOST` / `MYSQL_PORT` / `MYSQL_USER` / `MYSQL_PASSWORD` / `MYSQL_DATABASE` | 与本地 MySQL 一致 |
-| `SECRET_KEY` | 生产环境务必修改为随机字符串 |
-| `CHROMA_PERSIST_DIR` | 可选，Chroma 持久化目录（默认在 `server/chroma_data`） |
+| 变量 | 说明                                              |
+|------|-------------------------------------------------|
+| `DEEPSEEK_API_KEY` | **必填**，DEEPSEEK OpenAI 兼容接口的 API Key             |
+| `DEEPSEEK_BASE_URL` | 可选，默认 `https://api.deepseek.com` |
+| `DEEPSEEK_MODEL` | 可选，默认 `deepseek-v4-pro`                                 |
+| `DEEPSEEK_MAX_TOKENS` | 可选，默认 `2048`                                    |
+| `DEEPSEEK_TEMPERATURE` | 可选，默认 `0.5`                                     |
+| `MYSQL_HOST` / `MYSQL_PORT` / `MYSQL_USER` / `MYSQL_PASSWORD` / `MYSQL_DATABASE` | 与本地 MySQL 一致                                    |
+| `SECRET_KEY` | 生产环境务必修改为随机字符串                                  |
+| `CHROMA_PERSIST_DIR` | 可选，Chroma 持久化目录（默认在 `server/chroma_data`）       |
 
 ### 4. 安装并启动后端
 
