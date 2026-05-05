@@ -9,10 +9,9 @@ from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
+os.environ["HF_HUB_OFFLINE"] = "1"
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
 
-class OllamaServiceError(Exception):
-    """Ollama服务相关异常，用于提供更清晰的错误提示"""
-    pass
 
 
 class VectorService:
@@ -25,7 +24,7 @@ class VectorService:
         #     base_url=current_app.config['OLLAMA_BASE_URL']
         # )
         self.embeddings = HuggingFaceEmbeddings(
-            model_name="BAAI/bge-small-zh-v1.5",
+            model_name="bge-small-zh-v1.5",
             model_kwargs={"device": "cpu"},  # 有 NVIDIA GPU 可改为 "cuda"
             encode_kwargs={"normalize_embeddings": True},
         )
@@ -37,6 +36,7 @@ class VectorService:
         self.persist_dir = current_app.config['CHROMA_PERSIST_DIR']
         self.batch_size = current_app.config.get('EMBED_BATCH_SIZE', 10)
         self.max_retries = current_app.config.get('EMBED_MAX_RETRIES', 3)
+        self._vectorstores = {}  # 缓存已创建的 Chroma 实例
 
     def _get_collection_name(self, kb_id):
         """
@@ -166,11 +166,13 @@ class VectorService:
         :return: Chroma检索器
         """
         collection_name = self._get_collection_name(kb_id)
-        vectorstore = Chroma(
-            collection_name=collection_name,
-            embedding_function=self.embeddings,
-            persist_directory=self.persist_dir
-        )
+        if kb_id not in self._vectorstores:
+            self._vectorstores[kb_id] = Chroma(
+                collection_name=collection_name,
+                embedding_function=self.embeddings,
+                persist_directory=self.persist_dir
+            )
+        vectorstore = self._vectorstores[kb_id]
         return vectorstore.as_retriever(
             search_kwargs={'k': current_app.config['RETRIEVER_TOP_K']}
         )

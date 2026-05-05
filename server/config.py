@@ -4,6 +4,8 @@
 """
 import os
 
+from langchain_openai import ChatOpenAI
+
 
 class Config:
     """基础配置类"""
@@ -49,3 +51,13 @@ class Config:
 
     # RAG检索配置
     RETRIEVER_TOP_K = 4  # 检索返回的相似文档数量
+
+    # LLM设置
+    LLM = ChatOpenAI(
+        model="deepseek-v4-pro",
+        temperature=0.7,
+        max_tokens=4096,
+        streaming=True,
+        api_key=os.getenv("DEEPSEEK_API_KEY"),
+        base_url="https://api.deepseek.com"
+    )

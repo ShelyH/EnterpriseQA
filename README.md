@@ -138,6 +138,7 @@ npm run build
 
 ---
 
+
 ## 目录结构（简要）
 
 ```
@@ -166,6 +167,51 @@ EnterpriseQA/
 - 问答：`POST /api/chat/ask`
 
 前端 Axios `baseURL` 为 `/api`（开发环境由 Vite 代理到后端）。
+
+---
+## 重新向量化已有知识库
+
+修改 `server/config.py` 中的 `CHUNK_SIZE` / `CHUNK_OVERLAP` 后，已有 Chroma 向量不会自动更新。此时可以使用 `server/revectorize_kb.py`，基于数据库中保存的原始文件路径重新切块并写入向量库，无需重新上传文件。
+
+建议执行前先停止后端服务，避免上传、删除、问答等操作与向量库重建并发执行。
+
+进入后端目录：
+
+```bash
+cd server
+```
+
+预览某个知识库会处理哪些文档，不实际修改数据：
+
+```bash
+python revectorize_kb.py --kb-id 1 --dry-run
+```
+
+重新向量化指定知识库：
+
+```bash
+python revectorize_kb.py --kb-id 1
+```
+
+重新向量化单个文档：
+
+```bash
+python revectorize_kb.py --doc-id 12
+```
+
+重新向量化全部知识库：
+
+```bash
+python revectorize_kb.py --all
+```
+
+默认只处理状态为 `vectorized` 的文档。如果需要把 `failed` / `uploading` 状态的文档也纳入处理：
+
+```bash
+python revectorize_kb.py --kb-id 1 --include-failed
+```
+
+注意：如果只是修改分块大小，一般无需删除整个 `chroma_data`；脚本会按文档 ID 删除旧向量并重新写入。若同时更换了 embedding 模型且向量维度发生变化，建议先备份并清理对应 Chroma collection 或整个 `chroma_data`，再重新向量化所有相关文档。
 
 ---
 

@@ -60,7 +60,15 @@
         </div>
         <div class="detail-item">
           <div class="detail-label">回答：</div>
-          <div class="detail-value answer">{{ currentChat.answer }}</div>
+          <div class="detail-value answer">
+            <div
+              v-for="(block, index) in formattedAnswer"
+              :key="index"
+              :class="['answer-block', `answer-${block.type}`]"
+            >
+              {{ block.text }}
+            </div>
+          </div>
         </div>
         <div class="detail-item" v-if="currentChat.source_docs?.length">
           <div class="detail-label">参考来源：</div>
@@ -93,7 +101,7 @@
  * 对话历史页面
  * 展示用户的历史问答记录，支持按知识库筛选和查看详情
  */
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { getChatHistory } from '../api/chat'
 import { getAllKB } from '../api/knowledge'
 
@@ -126,6 +134,49 @@ function showDetail(row) {
   currentChat.value = row
   detailVisible.value = true
 }
+
+function cleanTitle(text) {
+  return text
+    .replace(/^\s{0,3}#{1,6}\s*/, '')
+    .replace(/^\s*[-*+]\s+/, '')
+    .replace(/\*+/g, '')
+    .replace(/：\s*$/, '')
+    .trim()
+}
+
+function isContentTitle(line) {
+  const trimmed = line.trim()
+  if (!trimmed) return false
+  if (/^#{1,6}\s+/.test(trimmed)) return true
+  if (/^\*{1,3}[^*]+\*{1,3}\s*[:：]?$/.test(trimmed)) return true
+  if (/^#{1,6}\s*\*+/.test(trimmed)) return true
+  return false
+}
+
+function stripInlineMarkdown(text) {
+  return text.replace(/\*{1,3}([^*]+?)\*{1,3}/g, '$1').trim()
+}
+
+function formatAnswerContent(content) {
+  if (!content) return []
+
+  return content
+    .split(/\r?\n/)
+    .map((line) => {
+      if (isContentTitle(line)) {
+        return { type: 'title', text: cleanTitle(line) }
+      }
+
+      const trimmed = line.trim()
+      if (/^([-*+]\s+|\d+[.)、]\s*)/.test(trimmed)) {
+        return { type: 'list', text: stripInlineMarkdown(trimmed) }
+      }
+
+      return { type: trimmed ? 'paragraph' : 'spacer', text: stripInlineMarkdown(line) }
+    })
+}
+
+const formattedAnswer = computed(() => formatAnswerContent(currentChat.value?.answer || ''))
 
 onMounted(() => {
   loadKBOptions()
@@ -180,7 +231,46 @@ onMounted(() => {
   border: 1px solid rgba(13, 148, 136, 0.12);
   padding: 12px;
   border-radius: 10px;
+}
+
+.answer-block {
   white-space: pre-wrap;
+}
+
+.answer-title {
+  margin: 12px 0 6px;
+  color: #0f766e;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.answer-title:first-child {
+  margin-top: 0;
+}
+
+.answer-list {
+  position: relative;
+  padding-left: 18px;
+  margin: 4px 0;
+}
+
+.answer-list::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 0.78em;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #14b8a6;
+}
+
+.answer-paragraph {
+  margin: 4px 0;
+}
+
+.answer-spacer {
+  height: 8px;
 }
 
 .source-tag {

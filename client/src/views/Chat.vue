@@ -41,14 +41,6 @@
           <p>请从左侧选择知识库，然后输入您的问题</p>
         </div>
         <ChatMessage v-for="(msg, i) in messages" :key="i" :message="msg" />
-        <!-- 加载中提示 -->
-        <div v-if="asking" class="loading-msg">
-          <el-avatar :size="36" :icon="Monitor" class="loading-avatar" />
-          <div class="loading-bubble">
-            <span class="loading-dot">思考中</span>
-            <el-icon class="is-loading"><Loading /></el-icon>
-          </div>
-        </div>
       </div>
 
       <!-- 输入区域 -->
@@ -85,9 +77,9 @@
  */
 import { ref, onMounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Promotion, Loading, Monitor } from '@element-plus/icons-vue'
+import { Promotion } from '@element-plus/icons-vue'
 import { getAllKB } from '../api/knowledge'
-import { askQuestion } from '../api/chat'
+import { askQuestionStream } from '../api/chat'
 import ChatMessage from '../components/ChatMessage.vue'
 
 /** 知识库列表 */
@@ -136,35 +128,53 @@ async function scrollToBottom() {
   }
 }
 
+function updateMessage(index, patch) {
+  messages.value[index] = {
+    ...messages.value[index],
+    ...patch
+  }
+}
+
 /** 发送问题 */
 async function sendQuestion() {
   const q = question.value.trim()
   if (!q || !selectedKb.value || asking.value) return
 
-  // 添加用户消息
   messages.value.push({ role: 'user', content: q })
+  messages.value.push({ role: 'ai', content: '', sources: [] })
+  const aiMessageIndex = messages.value.length - 1
   question.value = ''
   asking.value = true
   scrollToBottom()
 
   try {
-    const res = await askQuestion({
-      question: q,
-      kb_id: selectedKb.value.id,
-      session_id: sessionId.value
-    })
-
-    // 添加AI回复
-    messages.value.push({
-      role: 'ai',
-      content: res.data.answer,
-      sources: res.data.source_docs
-    })
+    await askQuestionStream(
+      {
+        question: q,
+        kb_id: selectedKb.value.id,
+        session_id: sessionId.value
+      },
+      {
+        onSources: (sources) => {
+          updateMessage(aiMessageIndex, { sources })
+        },
+        onDelta: (delta) => {
+          const currentContent = messages.value[aiMessageIndex]?.content || ''
+          updateMessage(aiMessageIndex, { content: currentContent + delta })
+          scrollToBottom()
+        },
+        onDone: (data) => {
+          updateMessage(aiMessageIndex, {
+            content: data.answer || messages.value[aiMessageIndex].content,
+            sources: data.source_docs || messages.value[aiMessageIndex].sources
+          })
+        }
+      }
+    )
   } catch (err) {
-    messages.value.push({
-      role: 'ai',
-      content: '抱歉，服务出现异常，请稍后重试。'
-    })
+    const errorMessage = err.message || '抱歉，服务出现异常，请稍后重试。'
+    updateMessage(aiMessageIndex, { content: errorMessage })
+    ElMessage.error(errorMessage)
   } finally {
     asking.value = false
     scrollToBottom()
@@ -303,34 +313,6 @@ onMounted(() => loadKBList())
 .welcome p {
   font-size: 14px;
   color: #94a3b8;
-}
-
-.loading-msg {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  margin-bottom: 20px;
-}
-
-.loading-avatar {
-  background: linear-gradient(135deg, #14b8a6, #0d9488) !important;
-}
-
-.loading-bubble {
-  background: #ecfdf5;
-  border: 1px solid rgba(13, 148, 136, 0.15);
-  padding: 12px 16px;
-  border-radius: 12px;
-  border-top-left-radius: 4px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: #64748b;
-  font-size: 14px;
-}
-
-.loading-bubble :deep(.el-icon) {
-  color: #0d9488;
 }
 
 /* 输入区域 */

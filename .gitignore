@@ -1,6 +1,7 @@
 server/uploads/*
 server/test_docs/*
 venv/
+server/chroma_data
 # Logs
 logs
 *.log

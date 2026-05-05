@@ -5,7 +5,18 @@
       <el-avatar :size="36" :icon="isUser ? UserFilled : Monitor" :style="avatarStyle" />
     </div>
     <div class="bubble" :class="{ 'user-bubble': isUser, 'ai-bubble': !isUser }">
-      <div class="message-text">{{ message.content }}</div>
+      <div class="message-text">
+        <template v-if="formattedContent.length">
+          <div
+            v-for="(block, index) in formattedContent"
+            :key="index"
+            :class="['content-block', `content-${block.type}`]"
+          >
+            {{ block.text }}
+          </div>
+        </template>
+        <span v-else class="streaming-placeholder">思考中...</span>
+      </div>
       <!-- AI回答时显示参考来源 -->
       <div v-if="!isUser && message.sources?.length" class="sources">
         <div class="sources-title">参考来源：</div>
@@ -36,6 +47,48 @@ const props = defineProps({
   message: { type: Object, required: true }
 })
 
+function cleanTitle(text) {
+  return text
+    .replace(/^\s{0,3}#{1,6}\s*/, '')
+    .replace(/^\s*[-*+]\s+/, '')
+    .replace(/\*+/g, '')
+    .replace(/：\s*$/, '')
+    .trim()
+}
+
+function isContentTitle(line) {
+  const trimmed = line.trim()
+  if (!trimmed) return false
+  if (/^#{1,6}\s+/.test(trimmed)) return true
+  if (/^\*{1,3}[^*]+\*{1,3}\s*[:：]?$/.test(trimmed)) return true
+  if (/^#{1,6}\s*\*+/.test(trimmed)) return true
+  return false
+}
+
+function stripInlineMarkdown(text) {
+  return text.replace(/\*{1,3}([^*]+?)\*{1,3}/g, '$1').trim()
+}
+
+const formattedContent = computed(() => {
+  const content = props.message.content || ''
+  if (!content) return []
+
+  return content
+    .split(/\r?\n/)
+    .map((line) => {
+      if (isContentTitle(line)) {
+        return { type: 'title', text: cleanTitle(line) }
+      }
+
+      const trimmed = line.trim()
+      if (/^([-*+]\s+|\d+[.)、]\s*)/.test(trimmed)) {
+        return { type: 'list', text: stripInlineMarkdown(trimmed) }
+      }
+
+      return { type: trimmed ? 'paragraph' : 'spacer', text: stripInlineMarkdown(line) }
+    })
+})
+
 /** 是否为用户消息 */
 const isUser = computed(() => props.message.role === 'user')
 
@@ -63,7 +116,6 @@ const avatarStyle = computed(() => ({
   border-radius: 12px;
   line-height: 1.6;
   word-break: break-word;
-  white-space: pre-wrap;
 }
 
 .user-bubble {
@@ -82,6 +134,50 @@ const avatarStyle = computed(() => ({
 
 .message-text {
   font-size: 14px;
+}
+
+.content-block {
+  white-space: pre-wrap;
+}
+
+.content-title {
+  margin: 12px 0 6px;
+  color: #0f766e;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.content-title:first-child {
+  margin-top: 0;
+}
+
+.content-list {
+  position: relative;
+  padding-left: 18px;
+  margin: 4px 0;
+}
+
+.content-list::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 0.78em;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #14b8a6;
+}
+
+.content-paragraph {
+  margin: 4px 0;
+}
+
+.content-spacer {
+  height: 8px;
+}
+
+.streaming-placeholder {
+  color: #64748b;
 }
 
 .sources {

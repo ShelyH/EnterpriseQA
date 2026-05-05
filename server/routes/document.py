@@ -124,7 +124,6 @@ def upload():
     # 进行文档向量化处理
     try:
         from services.app_services import get_vector_service
-        from services.vector_service import OllamaServiceError
 
         vector_service = get_vector_service()
         # chunk_count = vector_service.process_document(doc.id, file_path, file_ext, kb_id)
@@ -142,10 +141,6 @@ def upload():
         # 更新知识库文档计数
         kb.doc_count = Document.query.filter_by(kb_id=kb_id, status='vectorized').count()
         db.session.commit()
-    except OllamaServiceError as e:
-        doc.status = 'failed'
-        db.session.commit()
-        return error(str(e))
     except ConnectionError:
         doc.status = 'failed'
         db.session.commit()

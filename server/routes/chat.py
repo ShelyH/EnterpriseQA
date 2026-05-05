@@ -4,7 +4,7 @@
 """
 import uuid
 import json
-from flask import Blueprint, request, g
+from flask import Blueprint, request, g, Response, stream_with_context
 from models import db
 from models.chat_history import ChatHistory
 from models.knowledge_base import KnowledgeBase
@@ -36,12 +36,10 @@ def ask():
     if not kb_id:
         return error('请选择知识库')
 
-    # 验证知识库是否存在
     kb = KnowledgeBase.query.get(kb_id)
     if not kb or kb.status != 1:
         return error('知识库不存在或已禁用')
 
-    # 调用RAG服务进行问答（进程内单例，避免每次请求重载嵌入模型）
     try:
         from services.app_services import get_rag_service
 
@@ -49,7 +47,6 @@ def ask():
     except Exception as e:
         return error(f'问答服务异常: {str(e)}')
 
-    # 保存对话记录
     chat = ChatHistory(
         user_id=g.user_id,
         kb_id=kb_id,
@@ -67,6 +64,82 @@ def ask():
         'session_id': session_id,
         'chat_id': chat.id
     })
+
+
+@chat_bp.route('/ask/stream', methods=['POST'])
+@login_required
+def ask_stream():
+    """
+    RAG知识库流式问答接口
+    使用Server-Sent Events返回answer_delta/source_docs/done/error事件
+    """
+    data = request.get_json()
+    if not data:
+        return error('请提供问题信息')
+
+    question = data.get('question', '').strip()
+    kb_id = data.get('kb_id')
+    session_id = data.get('session_id', str(uuid.uuid4().hex[:16]))
+
+    if not question:
+        return error('问题不能为空')
+    if not kb_id:
+        return error('请选择知识库')
+
+    kb = KnowledgeBase.query.get(kb_id)
+    if not kb or kb.status != 1:
+        return error('知识库不存在或已禁用')
+
+    user_id = g.user_id
+
+    def sse_event(event, payload):
+        return f"event: {event}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+    @stream_with_context
+    def generate():
+        answer_parts = []
+        source_docs = []
+
+        yield sse_event('ping', {'message': 'connected'})
+
+        try:
+            from services.app_services import get_rag_service
+
+            chunks, source_docs = get_rag_service().ask_stream(question, kb_id)
+            yield sse_event('source_docs', {'source_docs': source_docs, 'session_id': session_id})
+
+            for chunk in chunks:
+                if not chunk:
+                    continue
+                answer_parts.append(chunk)
+                yield sse_event('answer_delta', {'delta': chunk})
+
+            answer = ''.join(answer_parts)
+            chat = ChatHistory(
+                user_id=user_id,
+                kb_id=kb_id,
+                session_id=session_id,
+                question=question,
+                answer=answer,
+                source_docs=json.dumps(source_docs, ensure_ascii=False)
+            )
+            db.session.add(chat)
+            db.session.commit()
+            yield sse_event('done', {
+                'answer': answer,
+                'source_docs': source_docs,
+                'session_id': session_id,
+                'chat_id': chat.id
+            })
+        except Exception as e:
+            db.session.rollback()
+            yield sse_event('error', {'message': f'问答服务异常: {str(e)}'})
+
+    response = Response(generate(), mimetype='text/event-stream; charset=utf-8')
+    response.headers['Cache-Control'] = 'no-cache, no-transform'
+    response.headers['Connection'] = 'keep-alive'
+    response.headers['X-Accel-Buffering'] = 'no'
+    return response
 
 
 @chat_bp.route('/history', methods=['GET'])
