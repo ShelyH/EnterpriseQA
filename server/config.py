@@ -42,22 +42,28 @@ class Config:
     ALLOWED_EXTENSIONS = {'txt', 'pdf', 'md', 'docx'}
 
     # 文档分块配置
-    CHUNK_SIZE = 500  # 每个分块的字符数
-    CHUNK_OVERLAP = 50  # 分块之间的重叠字符数
+    CHUNK_SIZE = 1000  # 每个分块的字符数
+    CHUNK_OVERLAP = 150  # 分块之间的重叠字符数
 
     # 向量化批处理配置
-    EMBED_BATCH_SIZE = 10  # 每批发送给Ollama的分块数量
+    EMBED_BATCH_SIZE = 10  # 分块数量
     EMBED_MAX_RETRIES = 3  # 嵌入失败最大重试次数
 
     # RAG检索配置
-    RETRIEVER_TOP_K = 4  # 检索返回的相似文档数量
+    RETRIEVER_TOP_K = 10  # 检索返回的相似文档数量
 
-    # LLM设置
+    # LLM设置：支持 DeepSeek 或内网 OpenAI 兼容服务（如 vLLM、Ollama、Xinference、FastChat 等）
+    LLM_BASE_URL = os.environ.get('LLM_BASE_URL', 'https://api.deepseek.com')
+    LLM_API_KEY = os.environ.get('LLM_API_KEY') or os.environ.get('DEEPSEEK_API_KEY') or 'EMPTY'
+    LLM_MODEL = os.environ.get('LLM_MODEL', 'deepseek-v4-pro')
+    LLM_TEMPERATURE = float(os.environ.get('LLM_TEMPERATURE', 0.7))
+    LLM_MAX_TOKENS = int(os.environ.get('LLM_MAX_TOKENS', 4096))
+
     LLM = ChatOpenAI(
-        model="deepseek-v4-pro",
-        temperature=0.7,
-        max_tokens=4096,
+        model=LLM_MODEL,
+        temperature=LLM_TEMPERATURE,
+        max_tokens=LLM_MAX_TOKENS,
         streaming=True,
-        api_key=os.getenv("DEEPSEEK_API_KEY"),
-        base_url="https://api.deepseek.com"
+        api_key=LLM_API_KEY,
+        base_url=LLM_BASE_URL
     )

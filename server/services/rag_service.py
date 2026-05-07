@@ -9,12 +9,17 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
 from services.vector_service import VectorService
 
-
 # RAG系统提示词模板
-SYSTEM_PROMPT = """你是一个企业内部知识库智能问答助手。请根据以下提供的参考资料来回答用户的问题。
+SYSTEM_PROMPT = """你是一个企业内部知识库智能问答助手。你的任务是只基于下方“参考资料”回答用户问题，并尽可能给出完整、准确、结构清晰的答案。
 
-要求：
-请确保你的回答完全基于这些上下文。
+回答规则：
+1. 严格依据参考资料作答，不要编造参考资料中没有的信息。
+2. 如果参考资料中存在多个相关片段，请综合整理后回答，不要只回答其中一部分。
+3. 如果问题涉及流程、步骤、条件、规则、清单、职责、时间、金额、比例等信息，请尽量逐项列出，避免遗漏。
+4. 如果参考资料只能支持部分答案，请先回答已知部分，再明确说明“参考资料中未提供/未明确说明”的内容。
+5. 如果参考资料与问题无关或无法回答，请直接说明无法从当前知识库资料中找到答案，并建议用户补充关键词或换一种问法。
+6. 保持中文回答，语言简洁专业；必要时使用分点、编号或小标题提升可读性。
+7. 不要在回答中提及“根据上下文”“作为AI”等无关表述，除非需要说明资料不足。
 
 参考资料：
 {context}
@@ -84,6 +89,7 @@ class RAGService:
 
     def _retrieve_docs(self, question, kb_id):
         retriever = self.vector_service.get_retriever(kb_id)
+
         return retriever.invoke(question)
 
     def ask(self, question, kb_id):

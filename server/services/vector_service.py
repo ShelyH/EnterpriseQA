@@ -13,19 +13,52 @@ os.environ["HF_HUB_OFFLINE"] = "1"
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
 
 
+def _get_collection_name(kb_id):
+    """
+    根据知识库ID生成Chroma集合名称
+    每个知识库使用独立的collection进行隔离
+    """
+    return f"kb_{kb_id}"
+
+
+def _load_file(file_path, file_type):
+    """
+    根据文件类型加载文档内容
+    :param file_path: 文件路径
+    :param file_type: 文件类型（txt/pdf/md/docx）
+    :return: 文本内容
+    """
+    text = ''
+    if file_type in ('txt', 'md'):
+        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+            text = f.read()
+
+    elif file_type == 'pdf':
+        from pypdf import PdfReader
+        reader = PdfReader(file_path)
+        for page in reader.pages:
+            page_text = page.extract_text()
+            if page_text:
+                text += page_text + '\n'
+
+    elif file_type == 'docx':
+        from docx import Document as DocxDocument
+        doc = DocxDocument(file_path)
+        for para in doc.paragraphs:
+            if para.text.strip():
+                text += para.text + '\n'
+
+    return text
+
 
 class VectorService:
     """文档向量化服务类"""
 
     def __init__(self):
         """初始化嵌入模型和文本分割器"""
-        # self.embeddings = OllamaEmbeddings(
-        #     model=current_app.config['OLLAMA_EMBED_MODEL'],
-        #     base_url=current_app.config['OLLAMA_BASE_URL']
-        # )
         self.embeddings = HuggingFaceEmbeddings(
             model_name="bge-small-zh-v1.5",
-            model_kwargs={"device": "cpu"},  # 有 NVIDIA GPU 可改为 "cuda"
+            model_kwargs={"device": "cpu", "local_files_only": True},
             encode_kwargs={"normalize_embeddings": True},
         )
         self.text_splitter = RecursiveCharacterTextSplitter(
@@ -37,42 +70,6 @@ class VectorService:
         self.batch_size = current_app.config.get('EMBED_BATCH_SIZE', 10)
         self.max_retries = current_app.config.get('EMBED_MAX_RETRIES', 3)
         self._vectorstores = {}  # 缓存已创建的 Chroma 实例
-
-    def _get_collection_name(self, kb_id):
-        """
-        根据知识库ID生成Chroma集合名称
-        每个知识库使用独立的collection进行隔离
-        """
-        return f"kb_{kb_id}"
-
-    def _load_file(self, file_path, file_type):
-        """
-        根据文件类型加载文档内容
-        :param file_path: 文件路径
-        :param file_type: 文件类型（txt/pdf/md/docx）
-        :return: 文本内容
-        """
-        text = ''
-        if file_type in ('txt', 'md'):
-            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                text = f.read()
-
-        elif file_type == 'pdf':
-            from pypdf import PdfReader
-            reader = PdfReader(file_path)
-            for page in reader.pages:
-                page_text = page.extract_text()
-                if page_text:
-                    text += page_text + '\n'
-
-        elif file_type == 'docx':
-            from docx import Document as DocxDocument
-            doc = DocxDocument(file_path)
-            for para in doc.paragraphs:
-                if para.text.strip():
-                    text += para.text + '\n'
-
-        return text
 
     def _add_texts_with_retry(self, vectorstore, texts, metadatas, ids):
         """
@@ -111,9 +108,7 @@ class VectorService:
         :return: 分块数量
         """
 
-        # self._check_ollama()
-
-        text = self._load_file(file_path, file_type)
+        text = _load_file(file_path, file_type)
         if not text.strip():
             raise ValueError('文档内容为空，无法进行向量化')
 
@@ -125,14 +120,13 @@ class VectorService:
         metadatas = [{'doc_id': doc_id, 'file_name': file_name, 'chunk_index': i} for i in range(len(chunks))]
         ids = [f"doc_{doc_id}_chunk_{i}" for i in range(len(chunks))]
 
-        collection_name = self._get_collection_name(kb_id)
+        collection_name = _get_collection_name(kb_id)
         vectorstore = Chroma(
             collection_name=collection_name,
             embedding_function=self.embeddings,
             persist_directory=self.persist_dir
         )
 
-        # 分批写入，降低单次Ollama嵌入请求的压力
         for i in range(0, len(chunks), self.batch_size):
             batch_end = min(i + self.batch_size, len(chunks))
             self._add_texts_with_retry(
@@ -150,7 +144,7 @@ class VectorService:
         :param doc_id: 文档ID
         :param kb_id: 知识库ID
         """
-        collection_name = self._get_collection_name(kb_id)
+        collection_name = _get_collection_name(kb_id)
         vectorstore = Chroma(
             collection_name=collection_name,
             embedding_function=self.embeddings,
@@ -165,7 +159,7 @@ class VectorService:
         :param kb_id: 知识库ID
         :return: Chroma检索器
         """
-        collection_name = self._get_collection_name(kb_id)
+        collection_name = _get_collection_name(kb_id)
         if kb_id not in self._vectorstores:
             self._vectorstores[kb_id] = Chroma(
                 collection_name=collection_name,
@@ -174,5 +168,8 @@ class VectorService:
             )
         vectorstore = self._vectorstores[kb_id]
         return vectorstore.as_retriever(
-            search_kwargs={'k': current_app.config['RETRIEVER_TOP_K']}
+            search_type="similarity",
+            search_kwargs={
+                'k': current_app.config['RETRIEVER_TOP_K']
+            }
         )
