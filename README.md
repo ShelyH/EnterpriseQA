@@ -16,6 +16,8 @@
 | 问答 | **LangChain** RAG；LLM 通过 OpenAI 兼容接口调用（默认 **DEEPSEEK**）          |
 | 管理后台 | 数据统计图表（ECharts）                                                  |
 
+---
+
 ## 检索流程图
 ![检索流程图.svg](img/%E6%A3%80%E7%B4%A2%E6%B5%81%E7%A8%8B%E5%9B%BE.svg)
 ---
