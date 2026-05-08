@@ -29,7 +29,7 @@ def get_list():
     if keyword:
         query = query.filter(KnowledgeBase.kb_name.like(f'%{keyword}%'))
 
-    query = query.order_by(KnowledgeBase.create_time.desc())
+    query = query.order_by(KnowledgeBase.id.asc())
     pagination = query.paginate(page=page, per_page=page_size, error_out=False)
 
     items = [item.to_dict() for item in pagination.items]
@@ -42,7 +42,7 @@ def get_all():
     """
     获取所有启用的知识库（不分页，用于下拉选择）
     """
-    kb_list = KnowledgeBase.query.filter_by(status=1).order_by(KnowledgeBase.create_time.desc()).all()
+    kb_list = KnowledgeBase.query.filter_by(status=1).order_by(KnowledgeBase.id.asc()).all()
     return success([kb.to_dict() for kb in kb_list])
 
 

@@ -5,11 +5,21 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 
+// 登录态仅保存在当前浏览器会话，关闭标签页后需重新登录
+const authStorage = sessionStorage
+
+try {
+  localStorage.removeItem('token')
+  localStorage.removeItem('userInfo')
+} catch (_) {
+  /* ignore */
+}
+
 export const useUserStore = defineStore('user', () => {
   // 用户信息
-  const userInfo = ref(JSON.parse(localStorage.getItem('userInfo') || 'null'))
+  const userInfo = ref(JSON.parse(authStorage.getItem('userInfo') || 'null'))
   // Token
-  const token = ref(localStorage.getItem('token') || '')
+  const token = ref(authStorage.getItem('token') || '')
 
   /** 是否已登录 */
   const isLoggedIn = computed(() => !!token.value)
@@ -24,16 +34,16 @@ export const useUserStore = defineStore('user', () => {
   function setLoginInfo(data) {
     token.value = data.token
     userInfo.value = data.user
-    localStorage.setItem('token', data.token)
-    localStorage.setItem('userInfo', JSON.stringify(data.user))
+    authStorage.setItem('token', data.token)
+    authStorage.setItem('userInfo', JSON.stringify(data.user))
   }
 
   /** 清除登录信息（退出登录） */
   function logout() {
     token.value = ''
     userInfo.value = null
-    localStorage.removeItem('token')
-    localStorage.removeItem('userInfo')
+    authStorage.removeItem('token')
+    authStorage.removeItem('userInfo')
   }
 
   return { userInfo, token, isLoggedIn, isAdmin, setLoginInfo, logout }

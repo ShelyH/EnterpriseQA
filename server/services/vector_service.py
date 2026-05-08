@@ -32,7 +32,6 @@ def _load_file(file_path, file_type):
     if file_type in ('txt', 'md'):
         with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
             text = f.read()
-
     elif file_type == 'pdf':
         from pypdf import PdfReader
         reader = PdfReader(file_path)
@@ -40,7 +39,6 @@ def _load_file(file_path, file_type):
             page_text = page.extract_text()
             if page_text:
                 text += page_text + '\n'
-
     elif file_type == 'docx':
         from docx import Document as DocxDocument
         doc = DocxDocument(file_path)
@@ -73,7 +71,6 @@ class VectorService:
 
     def _add_texts_with_retry(self, vectorstore, texts, metadatas, ids):
         """
-        带重试的向量写入，处理Ollama瞬时故障(502/503/504等)
         :param vectorstore: Chroma向量库实例
         :param texts: 文本分块列表
         :param metadatas: 元数据列表

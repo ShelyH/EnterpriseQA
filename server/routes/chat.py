@@ -71,7 +71,7 @@ def ask():
 def ask_stream():
     """
     RAG知识库流式问答接口
-    使用Server-Sent Events返回answer_delta/source_docs/done/error事件
+    使用Server-Sent Events返回answer_delta（正文流式）→ source_docs → done/error
     """
     data = request.get_json()
     if not data:
@@ -106,13 +106,14 @@ def ask_stream():
             from services.app_services import get_rag_service
 
             chunks, source_docs = get_rag_service().ask_stream(question, kb_id)
-            yield sse_event('source_docs', {'source_docs': source_docs, 'session_id': session_id})
 
             for chunk in chunks:
                 if not chunk:
                     continue
                 answer_parts.append(chunk)
                 yield sse_event('answer_delta', {'delta': chunk})
+
+            yield sse_event('source_docs', {'source_docs': source_docs, 'session_id': session_id})
 
             answer = ''.join(answer_parts)
             chat = ChatHistory(

@@ -43,7 +43,7 @@ class Config:
 
     # 文档分块配置
     CHUNK_SIZE = 1000  # 每个分块的字符数
-    CHUNK_OVERLAP = 150  # 分块之间的重叠字符数
+    CHUNK_OVERLAP = 100  # 分块之间的重叠字符数
 
     # 向量化批处理配置
     EMBED_BATCH_SIZE = 10  # 分块数量

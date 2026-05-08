@@ -12,7 +12,7 @@ export function askQuestion(data) {
 
 /** 发送问题（RAG流式问答） */
 export async function askQuestionStream(data, handlers = {}) {
-  const token = localStorage.getItem('token')
+  const token = sessionStorage.getItem('token')
   const response = await fetch('/api/chat/ask/stream', {
     method: 'POST',
     headers: {

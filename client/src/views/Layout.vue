@@ -5,7 +5,7 @@
     <el-aside :width="isCollapse ? '64px' : '220px'" class="aside">
       <div class="logo">
         <el-icon :size="24"><ChatDotSquare /></el-icon>
-        <span v-show="!isCollapse" class="logo-text">企业知识库</span>
+        <span v-show="!isCollapse" class="logo-text">企业知识库问答系统</span>
       </div>
       <el-menu
         :default-active="$route.path"
@@ -13,29 +13,25 @@
         :router="true"
         class="aside-menu"
       >
-        <!-- 管理员菜单 -->
-        <template v-if="userStore.isAdmin">
-          <el-menu-item index="/home">
-            <el-icon><DataAnalysis /></el-icon>
-            <template #title>数据概览</template>
-          </el-menu-item>
-          <el-menu-item index="/knowledge-base">
-            <el-icon><FolderOpened /></el-icon>
-            <template #title>知识库管理</template>
-          </el-menu-item>
-          <el-menu-item index="/document">
-            <el-icon><Document /></el-icon>
-            <template #title>文档管理</template>
-          </el-menu-item>
-          <el-menu-item index="/user-manage">
-            <el-icon><User /></el-icon>
-            <template #title>用户管理</template>
-          </el-menu-item>
-        </template>
-        <!-- 通用菜单 -->
+        <el-menu-item v-if="userStore.isAdmin" index="/home">
+          <el-icon><DataAnalysis /></el-icon>
+          <template #title>数据概览</template>
+        </el-menu-item>
         <el-menu-item index="/chat">
           <el-icon><ChatDotRound /></el-icon>
           <template #title>智能问答</template>
+        </el-menu-item>
+        <el-menu-item v-if="userStore.isAdmin" index="/knowledge-base">
+          <el-icon><FolderOpened /></el-icon>
+          <template #title>知识库管理</template>
+        </el-menu-item>
+        <el-menu-item v-if="userStore.isAdmin" index="/document">
+          <el-icon><Document /></el-icon>
+          <template #title>文档管理</template>
+        </el-menu-item>
+        <el-menu-item v-if="userStore.isAdmin" index="/user-manage">
+          <el-icon><User /></el-icon>
+          <template #title>用户管理</template>
         </el-menu-item>
         <el-menu-item index="/chat-history">
           <el-icon><Clock /></el-icon>

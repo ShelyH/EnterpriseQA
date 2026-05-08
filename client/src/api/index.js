@@ -5,6 +5,7 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import router from '../router'
+import { useUserStore } from '../stores/user'
 
 // 创建axios实例
 const request = axios.create({
@@ -15,7 +16,7 @@ const request = axios.create({
 // 请求拦截器：自动携带Token
 request.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token')
+    const token = sessionStorage.getItem('token')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
@@ -33,8 +34,12 @@ request.interceptors.response.use(
     }
     // Token过期或未登录，跳转登录页
     if (res.code === 401) {
-      localStorage.removeItem('token')
-      localStorage.removeItem('userInfo')
+      try {
+        useUserStore().logout()
+      } catch (_) {
+        sessionStorage.removeItem('token')
+        sessionStorage.removeItem('userInfo')
+      }
       router.push('/login')
       ElMessage.error(res.message || '登录已过期')
       return Promise.reject(new Error(res.message))

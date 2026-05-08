@@ -92,28 +92,6 @@ class RAGService:
 
         return retriever.invoke(question)
 
-    def ask(self, question, kb_id):
-        """
-        RAG问答主方法
-        流程: 用户提问 -> 向量检索 -> 构建上下文 -> LLM生成回答
-        :param question: 用户问题
-        :param kb_id: 知识库ID
-        :return: (回答文本, 参考来源列表)
-        """
-        docs = self._retrieve_docs(question, kb_id)
-
-        if not docs:
-            return '抱歉，在知识库中未找到与您问题相关的内容，请尝试换个方式提问。', []
-
-        rag_chain = self._create_rag_chain(docs)
-        start = time.perf_counter()
-        answer = rag_chain.invoke(question)
-        elapsed = time.perf_counter() - start
-        print(f"rag_chain.invoke 耗时: {elapsed:.4f} 秒")
-        source_docs = _extract_source_docs(docs)
-
-        return answer, source_docs
-
     def ask_stream(self, question, kb_id):
         """
         RAG流式问答方法

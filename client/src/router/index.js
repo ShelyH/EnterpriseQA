@@ -63,8 +63,8 @@ const router = createRouter({
 
 // 全局前置守卫：登录和权限检查
 router.beforeEach((to, from, next) => {
-  const token = localStorage.getItem('token')
-  const userInfo = JSON.parse(localStorage.getItem('userInfo') || 'null')
+  const token = sessionStorage.getItem('token')
+  const userInfo = JSON.parse(sessionStorage.getItem('userInfo') || 'null')
 
   // 未登录且不是登录页，跳转登录
   if (!token && to.path !== '/login') {

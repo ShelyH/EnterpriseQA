@@ -18,7 +18,8 @@ doc_bp = Blueprint('document', __name__)
 def allowed_file(filename):
     """检查文件扩展名是否允许上传"""
     return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in current_app.config['ALLOWED_EXTENSIONS']
+        filename.rsplit('.', 1)[1].lower() in current_app.config['ALLOWED_EXTENSIONS']
+
 
 def _sanitize_storage_stem(original_filename):
     """从上传文件名得到安全的磁盘文件主名（不含扩展名），去掉路径与 Windows 非法字符。"""
@@ -27,6 +28,7 @@ def _sanitize_storage_stem(original_filename):
         stem = stem.replace(ch, '_')
     stem = stem.strip(' .')
     return stem or 'upload'
+
 
 def _allocate_upload_path(upload_folder, original_filename, ext_lower):
     """
@@ -43,6 +45,7 @@ def _allocate_upload_path(upload_folder, original_filename, ext_lower):
         n += 1
     return path, basename
 
+
 @doc_bp.route('/list', methods=['GET'])
 @login_required
 def get_list():
@@ -58,7 +61,7 @@ def get_list():
     if kb_id:
         query = query.filter_by(kb_id=kb_id)
 
-    query = query.order_by(Document.create_time.desc())
+    query = query.order_by(Document.id.asc())
     pagination = query.paginate(page=page, per_page=page_size, error_out=False)
 
     items = [item.to_dict() for item in pagination.items]
@@ -92,12 +95,7 @@ def upload():
     if not kb:
         return error('知识库不存在')
 
-    # 生成唯一文件名并保存
-    # file_ext = file.filename.rsplit('.', 1)[1].lower()
-    # unique_name = f"{uuid.uuid4().hex}.{file_ext}"
-    # file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], unique_name)
-    # file.save(file_path)
-        # 基于上传原名生成磁盘文件名（重名则追加序号），并保存
+    # 基于上传原名生成磁盘文件名（重名则追加序号），并保存
     file_ext = file.filename.rsplit('.', 1)[1].lower()
     file_path, _stored_basename = _allocate_upload_path(
         current_app.config['UPLOAD_FOLDER'],
@@ -126,7 +124,6 @@ def upload():
         from services.app_services import get_vector_service
 
         vector_service = get_vector_service()
-        # chunk_count = vector_service.process_document(doc.id, file_path, file_ext, kb_id)
         chunk_count = vector_service.process_document(
             doc.id,
             file_path,

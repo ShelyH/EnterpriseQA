@@ -29,7 +29,13 @@
     <!-- 数据表格 -->
     <el-card shadow="never">
       <el-table :data="tableData" v-loading="loading" stripe>
-        <el-table-column prop="id" label="ID" width="60" />
+        <el-table-column
+          type="index"
+          :index="tableIndexMethod"
+          label="ID"
+          width="70"
+          align="center"
+        />
         <el-table-column prop="file_name" label="文件名" min-width="200" show-overflow-tooltip />
         <el-table-column prop="kb_name" label="所属知识库" width="150" />
         <el-table-column prop="file_type" label="类型" width="80" align="center">
@@ -140,6 +146,11 @@ const statusMap = {
   uploading: { label: '处理中', type: 'warning' },
   vectorized: { label: '已就绪', type: 'success' },
   failed: { label: '失败', type: 'danger' }
+}
+
+/** 表格序号（跨分页连续：第1页 1–10，第2页 11–20 …） */
+function tableIndexMethod(index) {
+  return (queryParams.page - 1) * queryParams.page_size + index + 1
 }
 
 /** 格式化文件大小 */
