@@ -15,57 +15,6 @@ from utils.response import success, error, page_response
 chat_bp = Blueprint('chat', __name__)
 
 
-@chat_bp.route('/ask', methods=['POST'])
-@login_required
-def ask():
-    """
-    RAG知识库问答接口
-    请求参数: question(问题), kb_id(知识库ID), session_id(会话ID，可选)
-    返回: AI回答和参考来源
-    """
-    data = request.get_json()
-    if not data:
-        return error('请提供问题信息')
-
-    question = data.get('question', '').strip()
-    kb_id = data.get('kb_id')
-    session_id = data.get('session_id', str(uuid.uuid4().hex[:16]))
-
-    if not question:
-        return error('问题不能为空')
-    if not kb_id:
-        return error('请选择知识库')
-
-    kb = KnowledgeBase.query.get(kb_id)
-    if not kb or kb.status != 1:
-        return error('知识库不存在或已禁用')
-
-    try:
-        from services.app_services import get_rag_service
-
-        answer, source_docs = get_rag_service().ask(question, kb_id)
-    except Exception as e:
-        return error(f'问答服务异常: {str(e)}')
-
-    chat = ChatHistory(
-        user_id=g.user_id,
-        kb_id=kb_id,
-        session_id=session_id,
-        question=question,
-        answer=answer,
-        source_docs=json.dumps(source_docs, ensure_ascii=False)
-    )
-    db.session.add(chat)
-    db.session.commit()
-
-    return success({
-        'answer': answer,
-        'source_docs': source_docs,
-        'session_id': session_id,
-        'chat_id': chat.id
-    })
-
-
 @chat_bp.route('/ask/stream', methods=['POST'])
 @login_required
 def ask_stream():

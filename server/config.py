@@ -50,7 +50,7 @@ class Config:
     EMBED_MAX_RETRIES = 3  # 嵌入失败最大重试次数
 
     # RAG检索配置
-    RETRIEVER_TOP_K = 10  # 检索返回的相似文档数量
+    RETRIEVER_TOP_K = 15  # 检索返回的相似文档数量
 
     # LLM设置：支持 DeepSeek 或内网 OpenAI 兼容服务（如 vLLM、Ollama、Xinference、FastChat 等）
     LLM_BASE_URL = os.environ.get('LLM_BASE_URL', 'https://api.deepseek.com')
