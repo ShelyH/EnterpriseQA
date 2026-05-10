@@ -3,7 +3,6 @@
 提供文档上传、列表查询和删除接口
 """
 import os
-import uuid
 from flask import Blueprint, request, g, current_app
 from models import db
 from models.document import Document
@@ -68,58 +67,54 @@ def get_list():
     return page_response(items, pagination.total, page, page_size)
 
 
-@doc_bp.route('/upload', methods=['POST'])
-@admin_required
-def upload():
+def _collect_upload_files():
     """
-    上传文档并进行向量化处理（仅管理员）
-    表单参数: file（文件）, kb_id（知识库ID）
+    从 multipart 中收集待处理文件。
+    支持多文件字段名 files；兼容旧客户端单文件字段 file。
     """
-    if 'file' not in request.files:
-        return error('请选择要上传的文件')
+    files = [f for f in request.files.getlist('files') if f and f.filename]
+    if not files:
+        legacy = request.files.get('file')
+        if legacy and legacy.filename:
+            files = [legacy]
+    return files
 
-    file = request.files['file']
-    kb_id = request.form.get('kb_id', type=int)
 
-    if not kb_id:
-        return error('请选择知识库')
+def _process_one_upload(file_storage, kb_id, kb):
+    """
+    保存单个文件、写入数据库并执行向量化。
+    :return: dict，含 success、file_name、document（失败且未建库时为 None）、error
+    """
+    display_name = os.path.basename((file_storage.filename or '').strip()) or file_storage.filename
+    if not allowed_file(file_storage.filename):
+        ext_hint = ', '.join(sorted(current_app.config['ALLOWED_EXTENSIONS']))
+        return {
+            'success': False,
+            'file_name': display_name,
+            'document': None,
+            'error': f'不支持的文件类型，仅支持: {ext_hint}',
+        }
 
-    if file.filename == '':
-        return error('请选择要上传的文件')
-
-    if not allowed_file(file.filename):
-        return error(f"不支持的文件类型，仅支持: {', '.join(current_app.config['ALLOWED_EXTENSIONS'])}")
-
-    # 验证知识库是否存在
-    kb = KnowledgeBase.query.get(kb_id)
-    if not kb:
-        return error('知识库不存在')
-
-    # 基于上传原名生成磁盘文件名（重名则追加序号），并保存
-    file_ext = file.filename.rsplit('.', 1)[1].lower()
-    file_path, _stored_basename = _allocate_upload_path(
+    file_ext = file_storage.filename.rsplit('.', 1)[1].lower()
+    file_path, _ = _allocate_upload_path(
         current_app.config['UPLOAD_FOLDER'],
-        file.filename,
-        file_ext
+        file_storage.filename,
+        file_ext,
     )
-    file.save(file_path)
-
-    # 获取文件大小
+    file_storage.save(file_path)
     file_size = os.path.getsize(file_path)
 
-    # 创建文档记录
     doc = Document(
         kb_id=kb_id,
-        file_name=file.filename,
+        file_name=file_storage.filename,
         file_path=file_path,
         file_size=file_size,
         file_type=file_ext,
-        creator_id=g.user_id
+        creator_id=g.user_id,
     )
     db.session.add(doc)
     db.session.commit()
 
-    # 进行文档向量化处理
     try:
         from services.app_services import get_vector_service
 
@@ -129,28 +124,83 @@ def upload():
             file_path,
             file_ext,
             kb_id,
-            display_file_name=os.path.basename(file.filename),
+            display_file_name=display_name,
         )
-        # 更新文档状态
         doc.status = 'vectorized'
         doc.chunk_count = chunk_count
-
-        # 更新知识库文档计数
         kb.doc_count = Document.query.filter_by(kb_id=kb_id, status='vectorized').count()
         db.session.commit()
+        return {'success': True, 'file_name': display_name, 'document': doc.to_dict(), 'error': None}
     except ConnectionError:
         doc.status = 'failed'
         db.session.commit()
-        return error('无法连接Ollama服务，请确认Ollama已启动并可访问')
+        return {
+            'success': False,
+            'file_name': display_name,
+            'document': doc.to_dict(),
+            'error': '无法连接Ollama服务，请确认Ollama已启动并可访问',
+        }
     except Exception as e:
         doc.status = 'failed'
         db.session.commit()
         err_msg = str(e)
         if 'status code' in err_msg:
-            return error(f'Ollama服务处理异常，请检查Ollama运行状态和系统资源: {err_msg}')
-        return error(f'文档向量化失败: {err_msg}')
+            err_msg = f'Ollama服务处理异常，请检查Ollama运行状态和系统资源: {err_msg}'
+        else:
+            err_msg = f'文档向量化失败: {err_msg}'
+        return {
+            'success': False,
+            'file_name': display_name,
+            'document': doc.to_dict(),
+            'error': err_msg,
+        }
 
-    return success(doc.to_dict(), '上传成功')
+
+@doc_bp.route('/upload', methods=['POST'])
+@admin_required
+def upload():
+    """
+    上传文档并进行向量化处理（仅管理员）
+    表单参数: kb_id（知识库ID）；files（可多文件）或 file（单文件，兼容旧版）
+    """
+    kb_id = request.form.get('kb_id', type=int)
+    if not kb_id:
+        return error('请选择知识库')
+
+    kb = KnowledgeBase.query.get(kb_id)
+    if not kb:
+        return error('知识库不存在')
+
+    files = _collect_upload_files()
+    if not files:
+        return error('请选择要上传的文件')
+
+    max_n = current_app.config.get('MAX_UPLOAD_FILES_PER_REQUEST', 30)
+    if len(files) > max_n:
+        return error(f'单次最多上传 {max_n} 个文件')
+
+    results = []
+    for file_storage in files:
+        results.append(_process_one_upload(file_storage, kb_id, kb))
+
+    succeeded = sum(1 for r in results if r['success'])
+    failed = len(results) - succeeded
+    if failed:
+        message = f'上传完成：成功 {succeeded} 个，失败 {failed} 个'
+    else:
+        message = f'上传成功（共 {succeeded} 个文件）'
+
+    return success(
+        {
+            'items': results,
+            'summary': {
+                'total': len(results),
+                'succeeded': succeeded,
+                'failed': failed,
+            },
+        },
+        message,
+    )
 
 
 @doc_bp.route('/<int:doc_id>', methods=['DELETE'])

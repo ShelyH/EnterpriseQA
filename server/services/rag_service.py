@@ -2,7 +2,6 @@
 RAG问答核心服务
 基于LangChain构建检索增强生成（RAG）问答链
 """
-import time
 from flask import current_app
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
@@ -18,10 +17,9 @@ SYSTEM_PROMPT = """你是一个企业内部知识库智能问答助手。你的�
 2. 必须尊重文档边界，不要把不同 document 的内容混为同一来源。
 3. 如果多个 document 可以共同支持答案，可以综合回答，但要说明信息分别来自哪些文件。
 4. 如果不同 document 之间存在冲突或口径不同，应明确指出差异，不要强行合并。
-5. 回答关键结论时，尽量在句末标注来源文件名，例如：（来源：员工请假管理办法.docx）。
-6. 如果参考资料只能支持部分答案，请先回答已知部分，再明确说明“参考资料中未提供/未明确说明”的内容。
-7. 如果参考资料与问题无关或无法回答，请直接说明无法从当前知识库资料中找到答案。
-8. 保持中文回答，语言简洁专业；必要时使用分点、编号或小标题提升可读性。
+5. 如果参考资料只能支持部分答案，请先回答已知部分，再明确说明“参考资料中未提供/未明确说明”的内容。
+6. 如果参考资料与问题无关或无法回答，请直接说明无法从当前知识库资料中找到答案。
+7. 保持中文回答，语言简洁专业；必要时使用分点、编号或小标题提升可读性。
 参考资料：
 {context}
 """
@@ -99,8 +97,11 @@ class RAGService:
 
     def _retrieve_docs(self, question, kb_id):
         retriever = self.vector_service.get_retriever(kb_id)
-
-        return retriever.invoke(question)
+        docs = retriever.invoke(question)
+        top_k = current_app.config['RETRIEVER_TOP_K']
+        if len(docs) > top_k:
+            docs = docs[:top_k]
+        return docs
 
     def ask_stream(self, question, kb_id):
         """

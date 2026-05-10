@@ -81,7 +81,7 @@
     </el-card>
 
     <!-- 上传对话框 -->
-    <el-dialog v-model="uploadVisible" title="上传文档" width="500px">
+    <el-dialog v-model="uploadVisible" title="上传文档" width="560px">
       <el-form label-width="100px">
         <el-form-item label="选择知识库" required>
           <el-select v-model="uploadKbId" placeholder="请选择知识库" style="width: 100%">
@@ -98,13 +98,16 @@
             ref="uploadRef"
             v-model:file-list="fileList"
             :auto-upload="false"
-            :limit="1"
-            :on-exceed="() => ElMessage.warning('只能上传一个文件')"
+            multiple
+            :limit="maxBatchFiles"
+            :on-exceed="onUploadExceed"
             accept=".txt,.pdf,.md,.docx"
           >
             <el-button type="primary" plain>选择文件</el-button>
             <template #tip>
-              <div class="el-upload__tip">支持 txt、pdf、md、docx 格式，最大50MB</div>
+              <div class="el-upload__tip">
+                支持 txt、pdf、md、docx；可多选批量上传，单次最多 {{ maxBatchFiles }} 个文件；请求总大小不超过 50MB
+              </div>
             </template>
           </el-upload>
         </el-form-item>
@@ -123,7 +126,7 @@
  * 支持按知识库筛选文档、上传新文档和删除文档
  */
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Upload } from '@element-plus/icons-vue'
 import { getDocList, uploadDoc, deleteDoc } from '../api/document'
 import { getAllKB } from '../api/knowledge'
@@ -137,6 +140,8 @@ const kbOptions = ref([])
 const uploadKbId = ref(null)
 const uploadRef = ref(null)
 const fileList = ref([])
+/** 与后端 MAX_UPLOAD_FILES_PER_REQUEST 默认一致；若调整后端环境变量，可同步修改 */
+const maxBatchFiles = 30
 
 /** 查询参数 */
 const queryParams = reactive({ page: 1, page_size: 10, kb_id: null })
@@ -151,6 +156,10 @@ const statusMap = {
 /** 表格序号（跨分页连续：第1页 1–10，第2页 11–20 …） */
 function tableIndexMethod(index) {
   return (queryParams.page - 1) * queryParams.page_size + index + 1
+}
+
+function onUploadExceed() {
+  ElMessage.warning(`单次最多选择 ${maxBatchFiles} 个文件`)
 }
 
 /** 格式化文件大小 */
@@ -183,19 +192,31 @@ async function handleUpload() {
   if (!uploadKbId.value) {
     return ElMessage.warning('请选择知识库')
   }
-  if (fileList.value.length === 0) {
+  const rawFiles = fileList.value.map((f) => f.raw).filter(Boolean)
+  if (rawFiles.length === 0) {
     return ElMessage.warning('请选择文件')
   }
 
   const formData = new FormData()
-  formData.append('file', fileList.value[0].raw)
   formData.append('kb_id', uploadKbId.value)
+  rawFiles.forEach((file) => formData.append('files', file))
 
   uploading.value = true
   try {
-    await uploadDoc(formData)
-    ElMessage.success('上传成功')
-    // uploadVisible.value = false
+    const res = await uploadDoc(formData)
+    const summary = res.data?.summary
+    if (summary?.failed > 0) {
+      const failedItems = (res.data.items || []).filter((x) => !x.success)
+      const detail = failedItems
+        .map((x) => `${x.file_name}: ${x.error || '失败'}`)
+        .join('\n')
+      ElMessage.warning(res.message || '部分文件上传失败')
+      if (detail) {
+        ElMessageBox.alert(detail, '失败明细', { confirmButtonText: '确定' })
+      }
+    } else {
+      ElMessage.success(res.message || '上传成功')
+    }
     fileList.value = []
     loadList()
   } finally {

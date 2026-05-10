@@ -38,8 +38,10 @@ class Config:
 
     # 文件上传配置
     UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
-    MAX_CONTENT_LENGTH = 50 * 1024 * 1024  # 最大上传文件大小：50MB
+    MAX_CONTENT_LENGTH = 50 * 1024 * 1024  # 单次请求体上限：50MB（多文件总和）
     ALLOWED_EXTENSIONS = {'txt', 'pdf', 'md', 'docx'}
+    # 单次请求最多上传文件个数（multipart 中 files 字段）
+    MAX_UPLOAD_FILES_PER_REQUEST = int(os.environ.get('MAX_UPLOAD_FILES_PER_REQUEST', '30'))
 
     # 文档分块配置
     CHUNK_SIZE = 1000  # 每个分块的字符数
@@ -50,7 +52,16 @@ class Config:
     EMBED_MAX_RETRIES = 3  # 嵌入失败最大重试次数
 
     # RAG检索配置
-    RETRIEVER_TOP_K = 15  # 检索返回的相似文档数量
+    RETRIEVER_TOP_K = 15  # 合并后送入 LLM 的文档块数量上限
+
+    # 混合检索：稠密（向量）+ 稀疏（BM25），环境变量 HYBRID_RETRIEVAL=true 开启
+    HYBRID_RETRIEVAL = os.environ.get('HYBRID_RETRIEVAL', 'true').lower() in ('1', 'true', 'yes')
+    HYBRID_DENSE_K = int(os.environ.get('HYBRID_DENSE_K', '10'))
+    HYBRID_SPARSE_K = int(os.environ.get('HYBRID_SPARSE_K', '10'))
+    # 与 EnsembleRetriever 中 retrievers 顺序一致：[Chroma 向量, BM25]
+    _w_dense = float(os.environ.get('HYBRID_WEIGHT_DENSE', '0.6'))
+    _w_sparse = float(os.environ.get('HYBRID_WEIGHT_SPARSE', '0.4'))
+    HYBRID_ENSEMBLE_WEIGHTS = [_w_dense, _w_sparse]
 
     # LLM设置：支持 DeepSeek 或内网 OpenAI 兼容服务（如 vLLM、Ollama、Xinference、FastChat 等）
     LLM_BASE_URL = os.environ.get('LLM_BASE_URL', 'https://api.deepseek.com')

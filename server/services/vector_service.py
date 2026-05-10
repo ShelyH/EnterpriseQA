@@ -5,7 +5,11 @@
 import os
 import time
 from flask import current_app
+# from langchain.retrievers.ensemble import EnsembleRetriever
 from langchain_chroma import Chroma
+from langchain_classic.retrievers import EnsembleRetriever
+from langchain_community.retrievers import BM25Retriever
+from langchain_core.documents import Document
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
@@ -68,6 +72,9 @@ class VectorService:
         self.batch_size = current_app.config.get('EMBED_BATCH_SIZE', 10)
         self.max_retries = current_app.config.get('EMBED_MAX_RETRIES', 3)
         self._vectorstores = {}  # 缓存已创建的 Chroma 实例
+        # 混合检索：chunk 文本列表与 BM25 检索器缓存（写入/删除后失效）
+        self._kb_documents_cache = {}
+        self._kb_bm25_retriever_cache = {}
 
     def _add_texts_with_retry(self, vectorstore, texts, metadatas, ids):
         """
@@ -94,6 +101,64 @@ class VectorService:
                 time.sleep(wait)
         raise last_error
 
+    def _invalidate_kb_documents_cache(self, kb_id):
+        self._kb_documents_cache.pop(kb_id, None)
+        self._kb_bm25_retriever_cache.pop(kb_id, None)
+
+    def _get_vectorstore(self, kb_id):
+        collection_name = _get_collection_name(kb_id)
+        if kb_id not in self._vectorstores:
+            self._vectorstores[kb_id] = Chroma(
+                collection_name=collection_name,
+                embedding_function=self.embeddings,
+                persist_directory=self.persist_dir
+            )
+        return self._vectorstores[kb_id]
+
+    def _load_kb_documents_from_chroma(self, kb_id):
+        """从 Chroma 读出某知识库全部 chunk，供 BM25 使用。"""
+        vectorstore = self._get_vectorstore(kb_id)
+        coll = vectorstore._collection
+        res = coll.get(include=['documents', 'metadatas'])
+        texts = res.get('documents') or []
+        metas = res.get('metadatas') or []
+        docs = []
+        for text, meta in zip(texts, metas):
+            if text:
+                docs.append(Document(page_content=text, metadata=dict(meta) if meta else {}))
+        return docs
+
+    def _get_cached_kb_documents(self, kb_id):
+        if kb_id not in self._kb_documents_cache:
+            self._kb_documents_cache[kb_id] = self._load_kb_documents_from_chroma(kb_id)
+        return self._kb_documents_cache[kb_id]
+
+    def _get_hybrid_retriever(self, kb_id):
+        dense_k = current_app.config.get('HYBRID_DENSE_K', 10)
+        sparse_k = current_app.config.get('HYBRID_SPARSE_K', 10)
+        weights = current_app.config.get('HYBRID_ENSEMBLE_WEIGHTS', [0.6, 0.4])
+
+        vectorstore = self._get_vectorstore(kb_id)
+        dense = vectorstore.as_retriever(
+            search_type='similarity',
+            search_kwargs={'k': dense_k},
+        )
+
+        sparse_docs = self._get_cached_kb_documents(kb_id)
+        if not sparse_docs:
+            return dense
+
+        bm25 = self._kb_bm25_retriever_cache.get(kb_id)
+        if bm25 is None:
+            bm25 = BM25Retriever.from_documents(sparse_docs)
+            self._kb_bm25_retriever_cache[kb_id] = bm25
+        bm25.k = sparse_k
+
+        return EnsembleRetriever(
+            retrievers=[dense, bm25],
+            weights=list(weights),
+        )
+
     def process_document(self, doc_id, file_path, file_type, kb_id, display_file_name=None):
         """
         处理文档：预检查 -> 解析文件 -> 文本分块 -> 分批存入向量库
@@ -117,12 +182,7 @@ class VectorService:
         metadatas = [{'doc_id': doc_id, 'file_name': file_name, 'chunk_index': i} for i in range(len(chunks))]
         ids = [f"doc_{doc_id}_chunk_{i}" for i in range(len(chunks))]
 
-        collection_name = _get_collection_name(kb_id)
-        vectorstore = Chroma(
-            collection_name=collection_name,
-            embedding_function=self.embeddings,
-            persist_directory=self.persist_dir
-        )
+        vectorstore = self._get_vectorstore(kb_id)
 
         for i in range(0, len(chunks), self.batch_size):
             batch_end = min(i + self.batch_size, len(chunks))
@@ -133,6 +193,7 @@ class VectorService:
                 ids=ids[i:batch_end],
             )
 
+        self._invalidate_kb_documents_cache(kb_id)
         return len(chunks)
 
     def delete_document(self, doc_id, kb_id):
@@ -141,31 +202,23 @@ class VectorService:
         :param doc_id: 文档ID
         :param kb_id: 知识库ID
         """
-        collection_name = _get_collection_name(kb_id)
-        vectorstore = Chroma(
-            collection_name=collection_name,
-            embedding_function=self.embeddings,
-            persist_directory=self.persist_dir
-        )
+        vectorstore = self._get_vectorstore(kb_id)
         # 根据文档ID过滤并删除
         vectorstore._collection.delete(where={'doc_id': doc_id})
+        self._invalidate_kb_documents_cache(kb_id)
 
     def get_retriever(self, kb_id):
         """
-        获取指定知识库的检索器
+        获取指定知识库的检索器（开启混合检索时为向量+BM25 融合）
         :param kb_id: 知识库ID
-        :return: Chroma检索器
+        :return: LangChain BaseRetriever
         """
-        collection_name = _get_collection_name(kb_id)
-        if kb_id not in self._vectorstores:
-            self._vectorstores[kb_id] = Chroma(
-                collection_name=collection_name,
-                embedding_function=self.embeddings,
-                persist_directory=self.persist_dir
-            )
-        vectorstore = self._vectorstores[kb_id]
+        if current_app.config.get('HYBRID_RETRIEVAL'):
+            return self._get_hybrid_retriever(kb_id)
+
+        vectorstore = self._get_vectorstore(kb_id)
         return vectorstore.as_retriever(
-            search_type="similarity",
+            search_type='similarity',
             search_kwargs={
                 'k': current_app.config['RETRIEVER_TOP_K']
             }
