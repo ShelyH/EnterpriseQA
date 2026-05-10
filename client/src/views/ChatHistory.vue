@@ -20,21 +20,44 @@
             />
           </el-select>
         </el-col>
+        <el-col :span="16" style="text-align: right">
+          <el-button
+            type="danger"
+            plain
+            :disabled="!selectedRows.length"
+            @click="handleBatchDelete"
+          >
+            批量删除{{ selectedRows.length ? `（${selectedRows.length}）` : '' }}
+          </el-button>
+        </el-col>
       </el-row>
     </el-card>
 
     <!-- 历史记录表格 -->
     <el-card shadow="never">
-      <el-table :data="tableData" v-loading="loading" stripe>
+      <el-table
+        ref="tableRef"
+        :data="tableData"
+        v-loading="loading"
+        stripe
+        row-key="id"
+        @selection-change="onSelectionChange"
+      >
+        <el-table-column type="selection" width="48" align="center" />
         <el-table-column prop="id" label="ID" width="60" />
         <el-table-column prop="question" label="问题" min-width="250" show-overflow-tooltip />
         <el-table-column prop="answer" label="回答" min-width="300" show-overflow-tooltip />
         <el-table-column prop="kb_name" label="知识库" width="130" />
         <el-table-column prop="username" label="提问者" width="100" />
         <el-table-column prop="create_time" label="时间" width="170" />
-        <el-table-column label="操作" width="80" fixed="right">
+        <el-table-column label="操作" width="140" fixed="right">
           <template #default="{ row }">
             <el-button type="primary" link @click="showDetail(row)">详情</el-button>
+            <el-popconfirm title="确认删除该条对话记录？" @confirm="handleDelete(row)">
+              <template #reference>
+                <el-button type="danger" link>删除</el-button>
+              </template>
+            </el-popconfirm>
           </template>
         </el-table-column>
       </el-table>
@@ -99,18 +122,21 @@
 <script setup>
 /**
  * 对话历史页面
- * 展示用户的历史问答记录，支持按知识库筛选和查看详情
+ * 展示用户的历史问答记录，支持按知识库筛选、查看详情、单条删除与批量删除
  */
-import { ref, reactive, computed, onMounted } from 'vue'
-import { getChatHistory } from '../api/chat'
+import { ref, reactive, computed, onMounted, nextTick } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { getChatHistory, deleteChatHistory, batchDeleteChatHistory } from '../api/chat'
 import { getAllKB } from '../api/knowledge'
 
+const tableRef = ref(null)
 const loading = ref(false)
 const detailVisible = ref(false)
 const tableData = ref([])
 const total = ref(0)
 const kbOptions = ref([])
 const currentChat = ref(null)
+const selectedRows = ref([])
 
 const queryParams = reactive({ page: 1, page_size: 10, kb_id: null })
 
@@ -119,20 +145,65 @@ async function loadKBOptions() {
   kbOptions.value = res.data
 }
 
+function clearTableSelection() {
+  selectedRows.value = []
+  nextTick(() => {
+    tableRef.value?.clearSelection()
+  })
+}
+
 async function loadList() {
   loading.value = true
   try {
     const res = await getChatHistory(queryParams)
     tableData.value = res.data.list
     total.value = res.data.total
+    clearTableSelection()
   } finally {
     loading.value = false
   }
 }
 
+function onSelectionChange(rows) {
+  selectedRows.value = rows
+}
+
 function showDetail(row) {
   currentChat.value = row
   detailVisible.value = true
+}
+
+async function handleDelete(row) {
+  await deleteChatHistory(row.id)
+  ElMessage.success('删除成功')
+  if (currentChat.value?.id === row.id) {
+    detailVisible.value = false
+    currentChat.value = null
+  }
+  await loadList()
+}
+
+async function handleBatchDelete() {
+  const rows = selectedRows.value
+  if (!rows.length) return
+  try {
+    await ElMessageBox.confirm(`确定删除选中的 ${rows.length} 条对话记录？`, '批量删除', {
+      type: 'warning',
+      confirmButtonText: '确定',
+      cancelButtonText: '取消'
+    })
+  } catch {
+    return
+  }
+  const ids = rows.map((r) => r.id)
+  const res = await batchDeleteChatHistory(ids)
+  ElMessage.success(res.message || '删除成功')
+  const deletedIds = new Set(ids)
+  if (currentChat.value && deletedIds.has(currentChat.value.id)) {
+    detailVisible.value = false
+    currentChat.value = null
+  }
+  await loadList()
 }
 
 function cleanTitle(text) {

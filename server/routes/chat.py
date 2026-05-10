@@ -120,6 +120,63 @@ def get_history():
     return page_response(items, pagination.total, page, page_size)
 
 
+@chat_bp.route('/history/batch-delete', methods=['POST'])
+@login_required
+def batch_delete_history():
+    """
+    批量删除对话历史
+    请求体 JSON: { "ids": [1, 2, 3] }
+    普通用户仅能删除自己的记录；管理员可删除任意记录；无权限或未匹配到的 ID 会被忽略
+    """
+    data = request.get_json()
+    if not data:
+        return error('请提供请求数据')
+
+    raw_ids = data.get('ids')
+    if not raw_ids or not isinstance(raw_ids, list):
+        return error('请提供要删除的记录 ID 列表')
+
+    id_set = set()
+    for i in raw_ids:
+        if isinstance(i, int) and i > 0:
+            id_set.add(i)
+        elif isinstance(i, str) and i.isdigit():
+            id_set.add(int(i))
+
+    if not id_set:
+        return error('请提供有效的记录 ID')
+
+    query = ChatHistory.query.filter(ChatHistory.id.in_(id_set))
+    if g.role != 'admin':
+        query = query.filter_by(user_id=g.user_id)
+
+    chats = query.all()
+    for chat in chats:
+        db.session.delete(chat)
+    db.session.commit()
+
+    deleted = len(chats)
+    return success({'deleted': deleted}, message=f'已删除 {deleted} 条记录')
+
+
+@chat_bp.route('/history/<int:chat_id>', methods=['DELETE'])
+@login_required
+def delete_history(chat_id):
+    """
+    删除一条对话历史
+    普通用户仅能删除自己的记录，管理员可删除任意记录
+    """
+    chat = ChatHistory.query.get(chat_id)
+    if not chat:
+        return error('记录不存在', 404)
+    if g.role != 'admin' and chat.user_id != g.user_id:
+        return error('无权限删除该记录', 403)
+
+    db.session.delete(chat)
+    db.session.commit()
+    return success(message='删除成功')
+
+
 @chat_bp.route('/session/<session_id>', methods=['GET'])
 @login_required
 def get_session(session_id):

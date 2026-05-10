@@ -75,6 +75,16 @@ export function getChatHistory(params) {
   return request.get('/chat/history', { params })
 }
 
+/** 删除一条对话历史 */
+export function deleteChatHistory(chatId) {
+  return request.delete(`/chat/history/${chatId}`)
+}
+
+/** 批量删除对话历史 */
+export function batchDeleteChatHistory(ids) {
+  return request.post('/chat/history/batch-delete', { ids })
+}
+
 /** 获取指定会话的对话记录 */
 export function getSessionChats(sessionId) {
   return request.get(`/chat/session/${sessionId}`)
