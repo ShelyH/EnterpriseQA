@@ -40,11 +40,31 @@ def _extract_source_docs(docs):
         file_name = doc.metadata.get('file_name', '未知')
         if file_name not in seen:
             seen.add(file_name)
+            preview = _doc_content_for_llm(doc)[:200]
             sources.append({
                 'file_name': file_name,
-                'content': doc.page_content[:200]
+                'content': preview
             })
     return sources
+
+
+def _doc_content_for_llm(doc):
+    """
+    送入 LLM 的正文：若存在 SentenceWindow 写入的 window 元数据则使用窗口文本，否则用 page_content。
+    """
+    from flask import has_request_context, current_app
+
+    meta = doc.metadata or {}
+    keys = []
+    if has_request_context():
+        keys.append(current_app.config.get('SENTENCE_WINDOW_METADATA_KEY', 'window'))
+    if 'window' not in keys:
+        keys.append('window')
+    for k in keys:
+        window_text = meta.get(k)
+        if isinstance(window_text, str) and window_text.strip():
+            return window_text
+    return doc.page_content or ''
 
 
 class RAGService:
@@ -78,7 +98,7 @@ class RAGService:
                 f"<doc_id>{doc_id}</doc_id>\n"
                 f"<file_name>{file_name}</file_name>\n"
                 f"<chunk_index>{chunk_index}</chunk_index>\n"
-                f"<content>\n{doc.page_content}\n</content>\n"
+                f"<content>\n{_doc_content_for_llm(doc)}\n</content>\n"
                 f"</document>"
             )
         return "\n\n".join(formatted)

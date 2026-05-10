@@ -53,6 +53,22 @@ def _load_file(file_path, file_type):
     return text
 
 
+def _chinese_sentence_splitter(text: str):
+    """
+    按常见中文/英文句末标点切句，供 SentenceWindowNodeParser 使用。
+    若未切出多句，则整段作为一句，避免空结果。
+    """
+    import re
+
+    if not text or not text.strip():
+        return []
+    parts = re.split(r'(?<=[。！？!?；;\n])', text)
+    sentences = [p.strip() for p in parts if p and p.strip()]
+    if not sentences:
+        return [text.strip()]
+    return sentences
+
+
 class VectorService:
     """文档向量化服务类"""
 
@@ -75,6 +91,42 @@ class VectorService:
         # 混合检索：chunk 文本列表与 BM25 检索器缓存（写入/删除后失效）
         self._kb_documents_cache = {}
         self._kb_bm25_retriever_cache = {}
+
+    def _sentence_window_chunks(self, text):
+        """
+        使用 LlamaIndex SentenceWindowNodeParser：每节点正文为一句（用于向量），
+        metadata[window] 为前后若干句拼接（用于 RAG 上下文扩展）。
+        """
+        from llama_index.core import Document as LIDocument
+        from llama_index.core.node_parser import SentenceWindowNodeParser
+
+        window_size = int(current_app.config.get('SENTENCE_WINDOW_SIZE', 3))
+        window_key = current_app.config.get('SENTENCE_WINDOW_METADATA_KEY', 'window')
+        use_zh = current_app.config.get('SENTENCE_WINDOW_CHINESE_SPLIT', True)
+
+        parser_kwargs = {
+            'window_size': max(1, window_size),
+            'window_metadata_key': window_key,
+            'include_prev_next_rel': False,
+        }
+        if use_zh:
+            parser_kwargs['sentence_splitter'] = _chinese_sentence_splitter
+
+        parser = SentenceWindowNodeParser.from_defaults(**parser_kwargs)
+        li_doc = LIDocument(text=text)
+        nodes = parser.get_nodes_from_documents([li_doc])
+
+        chunks = []
+        windows = []
+        for node in nodes:
+            sentence = (getattr(node, 'text', None) or '').strip()
+            if not sentence:
+                continue
+            window_text = node.metadata.get(window_key) or sentence
+            chunks.append(sentence)
+            windows.append(window_text)
+
+        return chunks, windows, window_key
 
     def _add_texts_with_retry(self, vectorstore, texts, metadatas, ids):
         """
@@ -161,7 +213,8 @@ class VectorService:
 
     def process_document(self, doc_id, file_path, file_type, kb_id, display_file_name=None):
         """
-        处理文档：预检查 -> 解析文件 -> 文本分块 -> 分批存入向量库
+        处理文档：预检查 -> 解析文件 -> 文本分块 -> 分批存入向量库。
+        USE_SENTENCE_WINDOW 为真时使用 LlamaIndex SentenceWindowNodeParser（按句向量、邻句窗口写入元数据）。
         :param doc_id: 文档ID
         :param file_path: 文件路径
         :param file_type: 文件类型
@@ -174,12 +227,27 @@ class VectorService:
         if not text.strip():
             raise ValueError('文档内容为空，无法进行向量化')
 
-        chunks = self.text_splitter.split_text(text)
-        if not chunks:
-            raise ValueError('文档分块失败')
-
         file_name = display_file_name or os.path.basename(file_path)
-        metadatas = [{'doc_id': doc_id, 'file_name': file_name, 'chunk_index': i} for i in range(len(chunks))]
+
+        if current_app.config.get('USE_SENTENCE_WINDOW'):
+            chunks, windows, window_key = self._sentence_window_chunks(text)
+            if not chunks:
+                raise ValueError('文档分块失败（SentenceWindow）')
+            metadatas = [
+                {
+                    'doc_id': doc_id,
+                    'file_name': file_name,
+                    'chunk_index': i,
+                    window_key: windows[i],
+                }
+                for i in range(len(chunks))
+            ]
+        else:
+            chunks = self.text_splitter.split_text(text)
+            if not chunks:
+                raise ValueError('文档分块失败')
+            metadatas = [{'doc_id': doc_id, 'file_name': file_name, 'chunk_index': i} for i in range(len(chunks))]
+
         ids = [f"doc_{doc_id}_chunk_{i}" for i in range(len(chunks))]
 
         vectorstore = self._get_vectorstore(kb_id)

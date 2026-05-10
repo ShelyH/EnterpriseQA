@@ -47,6 +47,18 @@ class Config:
     CHUNK_SIZE = 1000  # 每个分块的字符数
     CHUNK_OVERLAP = 100  # 分块之间的重叠字符数
 
+    # SentenceWindowNodeParser（LlamaIndex）：按句切分，向量存「单句」、元数据存「邻句窗口」；
+    # RAG 组装上下文时用窗口文本，利于召回精度和上下文完整。设为 true 时忽略 CHUNK_SIZE/OVERLAP。
+    USE_SENTENCE_WINDOW = os.environ.get('USE_SENTENCE_WINDOW', '').lower() in ('1', 'true', 'yes')
+    SENTENCE_WINDOW_SIZE = int(os.environ.get('SENTENCE_WINDOW_SIZE', '3'))  # 中心句左右各取几句
+    SENTENCE_WINDOW_METADATA_KEY = os.environ.get('SENTENCE_WINDOW_METADATA_KEY', 'window')
+    # 中文场景建议开启：按 。！？等切句（LlamaIndex 默认分句偏英文标点）
+    SENTENCE_WINDOW_CHINESE_SPLIT = os.environ.get('SENTENCE_WINDOW_CHINESE_SPLIT', 'true').lower() in (
+        '1',
+        'true',
+        'yes',
+    )
+
     # 向量化批处理配置
     EMBED_BATCH_SIZE = 10  # 分块数量
     EMBED_MAX_RETRIES = 3  # 嵌入失败最大重试次数
