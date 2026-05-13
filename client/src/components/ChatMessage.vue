@@ -6,16 +6,15 @@
     </div>
     <div class="bubble" :class="{ 'user-bubble': isUser, 'ai-bubble': !isUser }">
       <div class="message-text">
-        <template v-if="formattedContent.length">
-          <div
-            v-for="(block, index) in formattedContent"
-            :key="index"
-            :class="['content-block', `content-${block.type}`]"
-          >
-            {{ block.text }}
-          </div>
+        <template v-if="isUser">
+          <div class="content-plain">{{ message.content }}</div>
         </template>
-        <span v-else class="streaming-placeholder">思考中...</span>
+        <template v-else>
+          <div v-if="aiRenderedHtml" class="message-markdown-wrap">
+            <div class="message-markdown" v-html="aiRenderedHtml"></div>
+          </div>
+          <span v-else class="streaming-placeholder">思考中...</span>
+        </template>
       </div>
       <!-- AI回答时显示参考来源 -->
       <div v-if="!isUser && message.sources?.length" class="sources">
@@ -37,57 +36,18 @@
 <script setup>
 /**
  * 对话消息气泡组件
- * 区分用户消息和AI回答，AI回答可展示参考来源
+ * 区分用户消息和AI回答，AI回答可展示参考来源；AI 内容按 Markdown（含表格）渲染
  */
 import { computed } from 'vue'
 import { UserFilled, Monitor } from '@element-plus/icons-vue'
+import { renderSafeMarkdown } from '../utils/renderMarkdown.js'
 
 const props = defineProps({
   /** 消息对象 { role: 'user'|'ai', content: string, sources?: array } */
   message: { type: Object, required: true }
 })
 
-function cleanTitle(text) {
-  return text
-    .replace(/^\s{0,3}#{1,6}\s*/, '')
-    .replace(/^\s*[-*+]\s+/, '')
-    .replace(/\*+/g, '')
-    .replace(/：\s*$/, '')
-    .trim()
-}
-
-function isContentTitle(line) {
-  const trimmed = line.trim()
-  if (!trimmed) return false
-  if (/^#{1,6}\s+/.test(trimmed)) return true
-  if (/^\*{1,3}[^*]+\*{1,3}\s*[:：]?$/.test(trimmed)) return true
-  if (/^#{1,6}\s*\*+/.test(trimmed)) return true
-  return false
-}
-
-function stripInlineMarkdown(text) {
-  return text.replace(/\*{1,3}([^*]+?)\*{1,3}/g, '$1').trim()
-}
-
-const formattedContent = computed(() => {
-  const content = props.message.content || ''
-  if (!content) return []
-
-  return content
-    .split(/\r?\n/)
-    .map((line) => {
-      if (isContentTitle(line)) {
-        return { type: 'title', text: cleanTitle(line) }
-      }
-
-      const trimmed = line.trim()
-      if (/^([-*+]\s+|\d+[.)、]\s*)/.test(trimmed)) {
-        return { type: 'list', text: stripInlineMarkdown(trimmed) }
-      }
-
-      return { type: trimmed ? 'paragraph' : 'spacer', text: stripInlineMarkdown(line) }
-    })
-})
+const aiRenderedHtml = computed(() => renderSafeMarkdown(props.message.content || ''))
 
 /** 是否为用户消息 */
 const isUser = computed(() => props.message.role === 'user')
@@ -136,44 +96,116 @@ const avatarStyle = computed(() => ({
   font-size: 14px;
 }
 
-.content-block {
+.content-plain {
   white-space: pre-wrap;
+  word-break: break-word;
 }
 
-.content-title {
+.message-markdown-wrap {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.message-markdown {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #1e293b;
+}
+
+.message-markdown :deep(h1),
+.message-markdown :deep(h2),
+.message-markdown :deep(h3),
+.message-markdown :deep(h4),
+.message-markdown :deep(h5),
+.message-markdown :deep(h6) {
   margin: 12px 0 6px;
   color: #0f766e;
-  font-size: 15px;
   font-weight: 700;
 }
 
-.content-title:first-child {
+.message-markdown :deep(h1:first-child),
+.message-markdown :deep(h2:first-child),
+.message-markdown :deep(h3:first-child),
+.message-markdown :deep(h4:first-child),
+.message-markdown :deep(h5:first-child),
+.message-markdown :deep(h6:first-child) {
   margin-top: 0;
 }
 
-.content-list {
-  position: relative;
-  padding-left: 18px;
+.message-markdown :deep(p) {
   margin: 4px 0;
 }
 
-.content-list::before {
-  content: '';
-  position: absolute;
-  left: 4px;
-  top: 0.78em;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: #14b8a6;
-}
-
-.content-paragraph {
+.message-markdown :deep(ul),
+.message-markdown :deep(ol) {
   margin: 4px 0;
+  padding-left: 1.4em;
 }
 
-.content-spacer {
-  height: 8px;
+.message-markdown :deep(li) {
+  margin: 2px 0;
+}
+
+.message-markdown :deep(table) {
+  width: max-content;
+  max-width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0;
+  font-size: 13px;
+}
+
+.message-markdown :deep(th),
+.message-markdown :deep(td) {
+  border: 1px solid rgba(13, 148, 136, 0.35);
+  padding: 6px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.message-markdown :deep(th) {
+  background: rgba(20, 184, 166, 0.12);
+  font-weight: 600;
+  color: #0f766e;
+}
+
+.message-markdown :deep(pre) {
+  margin: 8px 0;
+  padding: 10px 12px;
+  overflow-x: auto;
+  background: rgba(15, 118, 110, 0.08);
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.message-markdown :deep(code) {
+  padding: 0.15em 0.4em;
+  background: rgba(15, 118, 110, 0.1);
+  border-radius: 4px;
+  font-size: 0.92em;
+}
+
+.message-markdown :deep(pre code) {
+  padding: 0;
+  background: none;
+  font-size: inherit;
+}
+
+.message-markdown :deep(blockquote) {
+  margin: 8px 0;
+  padding: 4px 0 4px 12px;
+  border-left: 3px solid rgba(20, 184, 166, 0.45);
+  color: #475569;
+}
+
+.message-markdown :deep(a) {
+  color: #0d9488;
+  word-break: break-all;
+}
+
+.message-markdown :deep(hr) {
+  margin: 12px 0;
+  border: none;
+  border-top: 1px solid rgba(13, 148, 136, 0.2);
 }
 
 .streaming-placeholder {
