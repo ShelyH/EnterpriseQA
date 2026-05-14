@@ -66,15 +66,15 @@ const FENCED_CODE_SPLIT = /(```[\s\S]*?```)/g
 const INLINE_CODE_SPLIT = /(`[^`]*`)/g
 
 /**
- * 在「非代码」片段中把【n】包成带 class 的 inline code HTML，便于与 Markdown 行内代码样式一致；
+ * 在「非代码」片段中把【n】包成上标 HTML，显示在正文文字右上角（角标）；
  * fenced 代码块与行内 `...` 内不处理，避免破坏代码内容。
  */
-function injectCitationAsInlineCode(text) {
+function injectCitationAsSuperscript(text) {
   return text.split(FENCED_CODE_SPLIT).map((fenceOrBody) => {
     if (fenceOrBody.startsWith('```')) return fenceOrBody
     return fenceOrBody.split(INLINE_CODE_SPLIT).map((chunk) => {
       if (chunk.startsWith('`') && chunk.endsWith('`') && chunk.length >= 2) return chunk
-      return chunk.replace(/【(\d+)】/g, '<code class="eq-cite" title="引用 $1">【$1】</code>')
+      return chunk.replace(/【(\d+)】/g, '<sup class="eq-cite" title="引用 $1">【$1】</sup>')
     }).join('')
   }).join('')
 }
@@ -87,6 +87,6 @@ function injectCitationAsInlineCode(text) {
 export function renderSafeMarkdown(markdown) {
   const src = typeof markdown === 'string' ? markdown : ''
   if (!src.trim()) return ''
-  const dirty = marked.parse(injectCitationAsInlineCode(src), { async: false })
+  const dirty = marked.parse(injectCitationAsSuperscript(src), { async: false })
   return DOMPurify.sanitize(dirty, PURIFY)
 }

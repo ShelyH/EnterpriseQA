@@ -375,25 +375,20 @@ onMounted(() => {
   word-break: break-all;
 }
 
-.message-markdown :deep(code.eq-cite) {
-  color: #dc2626;
+.message-markdown :deep(sup.eq-cite) {
+  display: inline-block;
+  vertical-align: super;
+  font-size: 0.68em;
+  line-height: 0;
   font-weight: 700;
-  background: rgba(220, 38, 38, 0.1);
-  border: 1px solid rgba(220, 38, 38, 0.22);
-  padding: 0.12em 0.38em;
-  border-radius: 4px;
-  font-size: 0.88em;
-  vertical-align: baseline;
-  line-height: 1.35;
-}
-
-.message-markdown :deep(pre code.eq-cite) {
-  padding: inherit;
+  color: #0d9488;
+  margin-left: 0.08em;
+  position: relative;
+  top: -0.02em;
+  text-decoration: none;
   border: none;
-  background: inherit;
-  color: inherit;
-  font-weight: inherit;
-  font-size: inherit;
+  background: none;
+  padding: 0;
 }
 
 .message-markdown :deep(hr) {
@@ -425,7 +420,7 @@ onMounted(() => {
 
 .source-cite-note {
   font-size: 12px;
-  color: #64748b;
+  color: #f80505;
   flex-shrink: 0;
 }
 

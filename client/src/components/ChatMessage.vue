@@ -17,7 +17,7 @@
         </template>
       </div>
       <div v-if="!isUser && displaySources.length" class="sources">
-        <div class="sources-title">文档来源（与正文【n】一致）</div>
+        <div class="sources-title">文档来源:</div>
         <div class="source-rows">
           <div
             v-for="(src, i) in displaySources"
@@ -213,25 +213,20 @@ function sourceRowKey(src, i) {
   word-break: break-all;
 }
 
-.message-markdown :deep(code.eq-cite) {
-  color: #dc2626;
+.message-markdown :deep(sup.eq-cite) {
+  display: inline-block;
+  vertical-align: super;
+  font-size: 0.68em;
+  line-height: 0;
   font-weight: 700;
-  background: rgba(220, 38, 38, 0.1);
-  border: 1px solid rgba(220, 38, 38, 0.22);
-  padding: 0.12em 0.38em;
-  border-radius: 4px;
-  font-size: 0.88em;
-  vertical-align: baseline;
-  line-height: 1.35;
-}
-
-.message-markdown :deep(pre code.eq-cite) {
-  padding: inherit;
+  color: #0d9488;
+  margin-left: 0.08em;
+  position: relative;
+  top: -0.02em;
+  text-decoration: none;
   border: none;
-  background: inherit;
-  color: inherit;
-  font-weight: inherit;
-  font-size: inherit;
+  background: none;
+  padding: 0;
 }
 
 .message-markdown :deep(hr) {
@@ -268,18 +263,18 @@ function sourceRowKey(src, i) {
   align-items: baseline;
   gap: 6px 10px;
   font-size: 13px;
-  color: #334155;
+  color: #ed0909;
 }
 
 .source-ref {
   font-weight: 700;
-  color: #0f766e;
+  color: #f40404;
   flex-shrink: 0;
 }
 
 .source-cite-note {
   font-size: 12px;
-  color: #64748b;
+  color: #e4091b;
   flex-shrink: 0;
 }
 
