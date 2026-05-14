@@ -89,17 +89,18 @@
             </div>
           </div>
         </div>
-        <div class="detail-item" v-if="currentChat.source_docs?.length">
-          <div class="detail-label">参考来源：</div>
-          <div class="detail-value">
-            <el-tag
-              v-for="(src, i) in currentChat.source_docs"
-              :key="i"
-              size="small"
-              class="source-tag"
+        <div class="detail-item" v-if="displaySourceDocs.length">
+          <div class="detail-label">文档来源：</div>
+          <div class="detail-value source-detail">
+            <div
+              v-for="(src, i) in displaySourceDocs"
+              :key="sourceRowKey(src, i)"
+              class="source-row"
             >
-              {{ src.file_name }}
-            </el-tag>
+              <span v-if="src.citeNote" class="source-cite-note">（引用 {{ src.citeNote }}）</span>
+              <span v-else-if="typeof src.ref_index === 'number'" class="source-ref">【{{ src.ref_index }}】</span>
+              <span class="source-meta">{{ src.file_name }}</span>
+            </div>
           </div>
         </div>
         <div class="detail-item">
@@ -125,6 +126,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { getChatHistory, deleteChatHistory, batchDeleteChatHistory } from '../api/chat'
 import { getAllKB } from '../api/knowledge'
 import { renderSafeMarkdown } from '../utils/renderMarkdown.js'
+import { normalizeSourceDocsForDisplay } from '../utils/sourceDocsDisplay.js'
 
 const tableRef = ref(null)
 const loading = ref(false)
@@ -204,6 +206,17 @@ async function handleBatchDelete() {
 }
 
 const answerHtml = computed(() => renderSafeMarkdown(currentChat.value?.answer || ''))
+
+const displaySourceDocs = computed(() =>
+  normalizeSourceDocsForDisplay(currentChat.value?.source_docs || [])
+)
+
+function sourceRowKey(src, i) {
+  if (src?.citeNote) return `cite-${src.file_name || ''}-${src.citeNote}`
+  const d = src?.doc_id
+  if (d) return `d-${d}`
+  return `f-${src?.file_name || ''}-${src?.ref_index ?? i}`
+}
 
 onMounted(() => {
   loadKBOptions()
@@ -362,14 +375,63 @@ onMounted(() => {
   word-break: break-all;
 }
 
+.message-markdown :deep(code.eq-cite) {
+  color: #dc2626;
+  font-weight: 700;
+  background: rgba(220, 38, 38, 0.1);
+  border: 1px solid rgba(220, 38, 38, 0.22);
+  padding: 0.12em 0.38em;
+  border-radius: 4px;
+  font-size: 0.88em;
+  vertical-align: baseline;
+  line-height: 1.35;
+}
+
+.message-markdown :deep(pre code.eq-cite) {
+  padding: inherit;
+  border: none;
+  background: inherit;
+  color: inherit;
+  font-weight: inherit;
+  font-size: inherit;
+}
+
 .message-markdown :deep(hr) {
   margin: 12px 0;
   border: none;
   border-top: 1px solid rgba(13, 148, 136, 0.2);
 }
 
-.source-tag {
-  margin-right: 6px;
-  margin-bottom: 4px;
+.source-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.source-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 10px;
+  font-size: 13px;
+  color: #334155;
+}
+
+.source-ref {
+  font-weight: 700;
+  color: #0f766e;
+  flex-shrink: 0;
+}
+
+.source-cite-note {
+  font-size: 12px;
+  color: #64748b;
+  flex-shrink: 0;
+}
+
+.source-meta {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
 }
 </style>

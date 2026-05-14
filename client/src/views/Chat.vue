@@ -73,7 +73,7 @@
 /**
  * 智能问答对话页面
  * 左侧选择知识库，右侧进行对话
- * 支持多轮对话，展示AI回答和参考来源
+ * 支持多轮对话；正文【n】上标与底部文档来源列表一致
  */
 import { ref, onMounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'

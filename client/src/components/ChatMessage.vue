@@ -16,18 +16,19 @@
           <span v-else class="streaming-placeholder">思考中...</span>
         </template>
       </div>
-      <!-- AI回答时显示参考来源 -->
-      <div v-if="!isUser && message.sources?.length" class="sources">
-        <div class="sources-title">参考来源：</div>
-        <el-tag
-          v-for="(src, i) in message.sources"
-          :key="i"
-          size="small"
-          type="info"
-          class="source-tag"
-        >
-          {{ src.file_name }}
-        </el-tag>
+      <div v-if="!isUser && displaySources.length" class="sources">
+        <div class="sources-title">文档来源（与正文【n】一致）</div>
+        <div class="source-rows">
+          <div
+            v-for="(src, i) in displaySources"
+            :key="sourceRowKey(src, i)"
+            class="source-row"
+          >
+            <span v-if="src.citeNote" class="source-cite-note">（引用 {{ src.citeNote }}）</span>
+            <span v-else-if="typeof src.ref_index === 'number'" class="source-ref">【{{ src.ref_index }}】</span>
+            <span class="source-meta">{{ src.file_name }}</span>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -36,11 +37,12 @@
 <script setup>
 /**
  * 对话消息气泡组件
- * 区分用户消息和AI回答，AI回答可展示参考来源；AI 内容按 Markdown（含表格）渲染
+ * 区分用户消息和 AI 回答；AI 内容按 Markdown 渲染；正文【n】上标 + 底部文档来源列表
  */
 import { computed } from 'vue'
 import { UserFilled, Monitor } from '@element-plus/icons-vue'
 import { renderSafeMarkdown } from '../utils/renderMarkdown.js'
+import { normalizeSourceDocsForDisplay } from '../utils/sourceDocsDisplay.js'
 
 const props = defineProps({
   /** 消息对象 { role: 'user'|'ai', content: string, sources?: array } */
@@ -49,6 +51,8 @@ const props = defineProps({
 
 const aiRenderedHtml = computed(() => renderSafeMarkdown(props.message.content || ''))
 
+const displaySources = computed(() => normalizeSourceDocsForDisplay(props.message.sources || []))
+
 /** 是否为用户消息 */
 const isUser = computed(() => props.message.role === 'user')
 
@@ -56,6 +60,13 @@ const isUser = computed(() => props.message.role === 'user')
 const avatarStyle = computed(() => ({
   backgroundColor: isUser.value ? '#0d9488' : '#14b8a6'
 }))
+
+function sourceRowKey(src, i) {
+  if (src?.citeNote) return `cite-${src.file_name || ''}-${src.citeNote}`
+  const d = src?.doc_id
+  if (d) return `d-${d}`
+  return `f-${src?.file_name || ''}-${src?.ref_index ?? i}`
+}
 </script>
 
 <style scoped>
@@ -202,6 +213,27 @@ const avatarStyle = computed(() => ({
   word-break: break-all;
 }
 
+.message-markdown :deep(code.eq-cite) {
+  color: #dc2626;
+  font-weight: 700;
+  background: rgba(220, 38, 38, 0.1);
+  border: 1px solid rgba(220, 38, 38, 0.22);
+  padding: 0.12em 0.38em;
+  border-radius: 4px;
+  font-size: 0.88em;
+  vertical-align: baseline;
+  line-height: 1.35;
+}
+
+.message-markdown :deep(pre code.eq-cite) {
+  padding: inherit;
+  border: none;
+  background: inherit;
+  color: inherit;
+  font-weight: inherit;
+  font-size: inherit;
+}
+
 .message-markdown :deep(hr) {
   margin: 12px 0;
   border: none;
@@ -221,11 +253,39 @@ const avatarStyle = computed(() => ({
 .sources-title {
   font-size: 12px;
   color: #64748b;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 
-.source-tag {
-  margin-right: 4px;
-  margin-bottom: 4px;
+.source-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.source-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 10px;
+  font-size: 13px;
+  color: #334155;
+}
+
+.source-ref {
+  font-weight: 700;
+  color: #0f766e;
+  flex-shrink: 0;
+}
+
+.source-cite-note {
+  font-size: 12px;
+  color: #64748b;
+  flex-shrink: 0;
+}
+
+.source-meta {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
 }
 </style>
