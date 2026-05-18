@@ -16,9 +16,9 @@ class Config:
     # MySQL数据库配置（端口3308，密码123456）
     MYSQL_HOST = os.environ.get('MYSQL_HOST', '127.0.0.1')
     MYSQL_PORT = int(os.environ.get('MYSQL_PORT', 3306))
-    MYSQL_USER = os.environ.get('MYSQL_USER', 'root')
+    MYSQL_USER = os.environ.get('MYSQL_USER', 'EQA')
     MYSQL_PASSWORD = os.environ.get('MYSQL_PASSWORD', 'mysql')
-    MYSQL_DATABASE = os.environ.get('MYSQL_DATABASE', 'db_enterprise_qa')
+    MYSQL_DATABASE = os.environ.get('MYSQL_DATABASE', 'EQA')
 
     # SQLAlchemy数据库连接URI
     SQLALCHEMY_DATABASE_URI = (
