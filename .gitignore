@@ -2,6 +2,7 @@ server/uploads/*
 server/test_docs/*
 venv/
 server/chroma_data
+server/milvus_demo.db
 # Logs
 logs
 *.log
