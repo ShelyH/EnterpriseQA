@@ -15,6 +15,15 @@
           />
         </el-col>
         <el-col :span="16" style="text-align: right">
+          <el-button
+            type="danger"
+            plain
+            :disabled="selectedRows.length === 0"
+            :loading="batchDeleting"
+            @click="handleBatchDelete"
+          >
+            批量删除
+          </el-button>
           <el-button type="primary" :icon="Plus" @click="handleAdd">新增知识库</el-button>
         </el-col>
       </el-row>
@@ -22,7 +31,14 @@
 
     <!-- 数据表格 -->
     <el-card shadow="never" class="table-card">
-      <el-table :data="tableData" v-loading="loading" stripe>
+      <el-table
+        :data="tableData"
+        v-loading="loading"
+        stripe
+        row-key="id"
+        @selection-change="handleSelectionChange"
+      >
+        <el-table-column type="selection" width="48" />
         <el-table-column prop="id" label="ID" width="60" />
         <el-table-column prop="kb_name" label="知识库名称" min-width="150" />
         <el-table-column prop="description" label="描述" min-width="200" show-overflow-tooltip />
@@ -87,15 +103,17 @@
  * 支持知识库的列表查询、新增、编辑和删除操作
  */
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Plus } from '@element-plus/icons-vue'
-import { getKBList, createKB, updateKB, deleteKB } from '../api/knowledge'
+import { getKBList, createKB, updateKB, deleteKB, batchDeleteKB } from '../api/knowledge'
 
 const loading = ref(false)
 const submitLoading = ref(false)
+const batchDeleting = ref(false)
 const dialogVisible = ref(false)
 const isEdit = ref(false)
 const tableData = ref([])
+const selectedRows = ref([])
 const total = ref(0)
 const formRef = ref(null)
 
@@ -110,6 +128,10 @@ const rules = {
   kb_name: [{ required: true, message: '请输入知识库名称', trigger: 'blur' }]
 }
 
+function handleSelectionChange(rows) {
+  selectedRows.value = rows
+}
+
 /** 加载知识库列表 */
 async function loadList() {
   loading.value = true
@@ -117,6 +139,7 @@ async function loadList() {
     const res = await getKBList(queryParams)
     tableData.value = res.data.list
     total.value = res.data.total
+    selectedRows.value = []
   } finally {
     loading.value = false
   }
@@ -162,6 +185,32 @@ async function handleDelete(id) {
   await deleteKB(id)
   ElMessage.success('删除成功')
   loadList()
+}
+
+/** 批量删除知识库 */
+async function handleBatchDelete() {
+  if (!selectedRows.value.length) {
+    return ElMessage.warning('请选择要删除的知识库')
+  }
+
+  await ElMessageBox.confirm(
+    `确认删除选中的 ${selectedRows.value.length} 个知识库？`,
+    '批量删除确认',
+    {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    }
+  )
+
+  batchDeleting.value = true
+  try {
+    await batchDeleteKB(selectedRows.value.map((row) => row.id))
+    ElMessage.success('批量删除成功')
+    loadList()
+  } finally {
+    batchDeleting.value = false
+  }
 }
 
 onMounted(() => loadList())

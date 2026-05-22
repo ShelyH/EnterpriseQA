@@ -21,6 +21,15 @@
           </el-select>
         </el-col>
         <el-col :span="16" style="text-align: right">
+          <el-button
+            type="danger"
+            plain
+            :disabled="selectedRows.length === 0"
+            :loading="batchDeleting"
+            @click="handleBatchDelete"
+          >
+            批量删除
+          </el-button>
           <el-button type="primary" :icon="Upload" @click="uploadVisible = true">上传文档</el-button>
         </el-col>
       </el-row>
@@ -28,7 +37,14 @@
 
     <!-- 数据表格 -->
     <el-card shadow="never">
-      <el-table :data="tableData" v-loading="loading" stripe>
+      <el-table
+        :data="tableData"
+        v-loading="loading"
+        stripe
+        row-key="id"
+        @selection-change="handleSelectionChange"
+      >
+        <el-table-column type="selection" width="48" />
         <el-table-column
           type="index"
           :index="tableIndexMethod"
@@ -128,13 +144,15 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Upload } from '@element-plus/icons-vue'
-import { getDocList, uploadDoc, deleteDoc } from '../api/document'
+import { getDocList, uploadDoc, deleteDoc, batchDeleteDoc } from '../api/document'
 import { getAllKB } from '../api/knowledge'
 
 const loading = ref(false)
 const uploading = ref(false)
+const batchDeleting = ref(false)
 const uploadVisible = ref(false)
 const tableData = ref([])
+const selectedRows = ref([])
 const total = ref(0)
 const kbOptions = ref([])
 const uploadKbId = ref(null)
@@ -151,6 +169,10 @@ const statusMap = {
   uploading: { label: '处理中', type: 'warning' },
   vectorized: { label: '已就绪', type: 'success' },
   failed: { label: '失败', type: 'danger' }
+}
+
+function handleSelectionChange(rows) {
+  selectedRows.value = rows
 }
 
 /** 表格序号（跨分页连续：第1页 1–10，第2页 11–20 …） */
@@ -182,6 +204,7 @@ async function loadList() {
     const res = await getDocList(queryParams)
     tableData.value = res.data.list
     total.value = res.data.total
+    selectedRows.value = []
   } finally {
     loading.value = false
   }
@@ -229,6 +252,32 @@ async function handleDelete(id) {
   await deleteDoc(id)
   ElMessage.success('删除成功')
   loadList()
+}
+
+/** 批量删除文档 */
+async function handleBatchDelete() {
+  if (!selectedRows.value.length) {
+    return ElMessage.warning('请选择要删除的文档')
+  }
+
+  await ElMessageBox.confirm(
+    `确认删除选中的 ${selectedRows.value.length} 个文档？`,
+    '批量删除确认',
+    {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    }
+  )
+
+  batchDeleting.value = true
+  try {
+    await batchDeleteDoc(selectedRows.value.map((row) => row.id))
+    ElMessage.success('批量删除成功')
+    loadList()
+  } finally {
+    batchDeleting.value = false
+  }
 }
 
 onMounted(() => {

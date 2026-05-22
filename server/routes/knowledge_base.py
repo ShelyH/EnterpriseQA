@@ -68,6 +68,42 @@ def create():
     return success(kb.to_dict(), '创建成功')
 
 
+@kb_bp.route('/batch-delete', methods=['POST'])
+@admin_required
+def batch_delete():
+    """
+    批量删除知识库（仅管理员，逻辑删除）
+    请求体 JSON: { "ids": [1, 2, 3] }
+    """
+    data = request.get_json() or {}
+    raw_ids = data.get('ids')
+    if not raw_ids or not isinstance(raw_ids, list):
+        return error('请提供要删除的知识库ID列表')
+
+    id_set = set()
+    for i in raw_ids:
+        if isinstance(i, int) and i > 0:
+            id_set.add(i)
+        elif isinstance(i, str) and i.isdigit():
+            id_set.add(int(i))
+
+    if not id_set:
+        return error('请提供有效的知识库ID')
+
+    kb_list = KnowledgeBase.query.filter(
+        KnowledgeBase.id.in_(id_set),
+        KnowledgeBase.status == 1,
+    ).all()
+    if not kb_list:
+        return error('未找到可删除的知识库', 404)
+
+    for kb in kb_list:
+        kb.status = 0
+
+    db.session.commit()
+    return success({'deleted': len(kb_list)}, message=f'已删除 {len(kb_list)} 个知识库')
+
+
 @kb_bp.route('/<int:kb_id>', methods=['PUT'])
 @admin_required
 def update(kb_id):

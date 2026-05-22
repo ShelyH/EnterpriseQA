@@ -2,7 +2,7 @@
 重新向量化已有知识库文档。
 
 用途：修改 CHUNK_SIZE / CHUNK_OVERLAP 后，不重新上传文件，直接基于数据库中保存的
-Document.file_path 对已有文档重新切块并写入 Chroma。
+Document.file_path 对已有文档重新切块并写入 Milvus（当前向量库）。
 
 示例：
     python revectorize_kb.py --kb-id 1

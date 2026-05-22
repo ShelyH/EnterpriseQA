@@ -6,7 +6,6 @@ from flask import current_app
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
-from services.vector_service import VectorService
 
 # RAG系统提示词模板
 SYSTEM_PROMPT = """你是一个企业内部知识库智能问答助手。你的任务是只基于下方“参考资料”回答用户问题，并尽可能给出完整、准确、结构清晰的答案。
@@ -33,29 +32,63 @@ def _doc_dedupe_key(meta):
     """用于合并「同一文档」多条检索：优先 doc_id，否则用 file_name。"""
     doc_id = meta.get('doc_id', '')
     if doc_id not in (None, '', '未知'):
-        return ('id', str(doc_id))
-    return ('name', str(meta.get('file_name', '未知来源')))
+        return 'id', str(doc_id)
+    return 'name', str(meta.get('file_name', '未知来源'))
+
+
+def _chunk_relevance_score(meta):
+    """从检索元数据读取相似度/距离分数；越大表示越相关（Milvus IP、Chroma 距离需已统一）。"""
+    for key in ('relevance_score', 'score', 'distance'):
+        value = meta.get(key)
+        if value is None:
+            continue
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _merged_relevance_sort_key(item):
+    """先按最佳检索名次，再按最佳分数（高分优先）。"""
+    rank = item.get('best_rank', 10 ** 9)
+    score = item.get('best_score')
+    if score is not None:
+        return (rank, -score)
+    return (rank, 0)
 
 
 def _merge_retrieved_docs_for_context(docs):
     """
-    按文档合并检索片段，顺序为检索结果中首次出现的文档顺序；
-    用于构造「每个 index 对应唯一文档」的 LLM 上下文。
+    按文档合并检索片段；多篇文档时按相关性排序（最佳检索名次优先，其次最高分）。
+    用于构造「每个 index 对应唯一文档」的 LLM 上下文与 ref_index。
     """
-    order = []
     buckets = {}
-    for doc in docs:
+    for rank, doc in enumerate(docs):
         meta = doc.metadata or {}
         key = _doc_dedupe_key(meta)
-        if key not in buckets:
-            buckets[key] = {'meta': meta, 'texts': []}
-            order.append(key)
+        score = _chunk_relevance_score(meta)
         text = (_doc_content_for_llm(doc) or '').strip()
+
+        if key not in buckets:
+            buckets[key] = {
+                'meta': meta,
+                'texts': [],
+                'best_rank': rank,
+                'best_score': score,
+            }
+        else:
+            b = buckets[key]
+            if rank < b['best_rank']:
+                b['best_rank'] = rank
+            if score is not None and (b['best_score'] is None or score > b['best_score']):
+                b['best_score'] = score
+
         if text:
             buckets[key]['texts'].append(text)
+
     merged = []
-    for key in order:
-        b = buckets[key]
+    for b in buckets.values():
         parts = []
         seen = set()
         for t in b['texts']:
@@ -67,7 +100,11 @@ def _merge_retrieved_docs_for_context(docs):
             'meta': b['meta'],
             'text': merged_text,
             'source_chunk_count': len(b['texts']),
+            'best_rank': b['best_rank'],
+            'best_score': b['best_score'],
         })
+
+    merged.sort(key=_merged_relevance_sort_key)
     return merged
 
 
@@ -110,7 +147,11 @@ class RAGService:
         """初始化 LLM 与向量服务；vector_service 建议由 app_services 注入以进程内复用。"""
 
         self.llm = current_app.config['LLM']
-        self.vector_service = vector_service if vector_service is not None else VectorService()
+        if vector_service is None:
+            from services.app_services import get_vector_service
+
+            vector_service = get_vector_service()
+        self.vector_service = vector_service
         self._prompt = ChatPromptTemplate.from_messages(
             [
                 ("system", SYSTEM_PROMPT),

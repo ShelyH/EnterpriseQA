@@ -27,3 +27,8 @@ export function updateKB(id, data) {
 export function deleteKB(id) {
   return request.delete(`/knowledge_base/${id}`)
 }
+
+/** 批量删除知识库 */
+export function batchDeleteKB(ids) {
+  return request.post('/knowledge_base/batch-delete', { ids })
+}

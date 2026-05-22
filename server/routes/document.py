@@ -203,6 +203,67 @@ def upload():
     )
 
 
+def _delete_document_record(doc):
+    kb_id = doc.kb_id
+
+    try:
+        from services.app_services import get_vector_service
+
+        vector_service = get_vector_service()
+        vector_service.delete_document(doc.id, kb_id)
+    except Exception:
+        pass
+
+    if doc.file_path and os.path.exists(doc.file_path):
+        os.remove(doc.file_path)
+
+    db.session.delete(doc)
+    return kb_id
+
+
+def _refresh_kb_doc_counts(kb_ids):
+    for kb_id in set(kb_ids):
+        kb = KnowledgeBase.query.get(kb_id)
+        if kb:
+            kb.doc_count = Document.query.filter_by(kb_id=kb_id, status='vectorized').count()
+
+
+@doc_bp.route('/batch-delete', methods=['POST'])
+@admin_required
+def batch_delete():
+    """
+    批量删除文档（仅管理员）
+    请求体 JSON: { "ids": [1, 2, 3] }
+    """
+    data = request.get_json() or {}
+    raw_ids = data.get('ids')
+    if not raw_ids or not isinstance(raw_ids, list):
+        return error('请提供要删除的文档ID列表')
+
+    id_set = set()
+    for i in raw_ids:
+        if isinstance(i, int) and i > 0:
+            id_set.add(i)
+        elif isinstance(i, str) and i.isdigit():
+            id_set.add(int(i))
+
+    if not id_set:
+        return error('请提供有效的文档ID')
+
+    docs = Document.query.filter(Document.id.in_(id_set)).all()
+    if not docs:
+        return error('未找到可删除的文档', 404)
+
+    affected_kb_ids = []
+    for doc in docs:
+        affected_kb_ids.append(_delete_document_record(doc))
+
+    db.session.flush()
+    _refresh_kb_doc_counts(affected_kb_ids)
+    db.session.commit()
+    return success({'deleted': len(docs)}, message=f'已删除 {len(docs)} 个文档')
+
+
 @doc_bp.route('/<int:doc_id>', methods=['DELETE'])
 @admin_required
 def delete(doc_id):
@@ -214,30 +275,8 @@ def delete(doc_id):
     if not doc:
         return error('文档不存在', 404)
 
-    kb_id = doc.kb_id
-
-    # 删除向量数据
-    try:
-        from services.app_services import get_vector_service
-
-        vector_service = get_vector_service()
-        vector_service.delete_document(doc.id, kb_id)
-    except Exception:
-        pass
-
-    # 删除物理文件
-    if os.path.exists(doc.file_path):
-        os.remove(doc.file_path)
-
-    # 删除数据库记录
-    db.session.delete(doc)
-
-    # 更新知识库文档计数
-    kb = KnowledgeBase.query.get(kb_id)
-    if kb:
-        kb.doc_count = Document.query.filter_by(kb_id=kb_id, status='vectorized').count() - 1
-        if kb.doc_count < 0:
-            kb.doc_count = 0
-
+    kb_id = _delete_document_record(doc)
+    db.session.flush()
+    _refresh_kb_doc_counts([kb_id])
     db.session.commit()
     return success(message='删除成功')

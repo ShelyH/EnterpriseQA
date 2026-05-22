@@ -12,7 +12,7 @@
 |------|------------------------------------------------------------------|
 | 用户与权限 | JWT 登录；角色 **admin**（管理后台、文档维护）与 **user**（问答与历史）                  |
 | 知识库 | 创建/启用知识库；文档上传 **txt / pdf / md / docx**                          |
-| 向量检索 | **Chroma** 持久化存储；嵌入模型 **BAAI/bge-small-zh-v1.5**（本地 HuggingFace） |
+| 向量检索 | **Milvus**（默认）；嵌入模型 **bge-small-zh-v1.5**（`server/bge-small-zh-v1.5`，SentenceTransformers） |
 | 问答 | **LangChain** RAG；LLM 通过 OpenAI 兼容接口调用（默认 **DEEPSEEK**）          |
 | 管理后台 | 数据统计图表（ECharts）                                                  |
 
@@ -27,7 +27,7 @@
 - **前端**：Vue 3、Vite、Element Plus、Pinia、Vue Router、Axios
 - **后端**：Python 3、Flask、Flask-SQLAlchemy、PyJWT
 - **数据库**：MySQL 8（业务数据）
-- **向量库**：Chroma（目录见环境变量 `CHROMA_PERSIST_DIR`）
+- **向量库**：Milvus（`MILVUS_URI`，默认 `http://localhost:19530`）；可选 `VECTOR_STORE=chroma` 回退 Chroma
 
 ---
 
@@ -38,7 +38,7 @@
 - MySQL **8.x**
 - 调用 LLM 所需的 **DEEPSEEK_API_KEY**（或改为自建 OpenAI 兼容服务后配置对应变量）
 
-**说明**：嵌入模型首次运行会从 HuggingFace 下载，耗时取决于网络；有 NVIDIA GPU 时可在 `server/services/vector_service.py` 中将 `device` 改为 `"cuda"` 以加速向量化。
+**说明**：需先启动 Milvus 服务；嵌入模型默认从 `server/bge-small-zh-v1.5` 本地加载。从 Chroma 迁移后请对知识库执行 `revectorize_kb.py` 重新写入向量。
 
 ---
 
@@ -75,7 +75,10 @@ cd EnterpriseQA
 | `DEEPSEEK_TEMPERATURE` | 可选，默认 `0.5`                                     |
 | `MYSQL_HOST` / `MYSQL_PORT` / `MYSQL_USER` / `MYSQL_PASSWORD` / `MYSQL_DATABASE` | 与本地 MySQL 一致                                    |
 | `SECRET_KEY` | 生产环境务必修改为随机字符串                                  |
-| `CHROMA_PERSIST_DIR` | 可选，Chroma 持久化目录（默认在 `server/chroma_data`）       |
+| `MILVUS_URI` | 可选，Milvus 地址，默认 `http://localhost:19530` |
+| `EMBEDDING_MODEL_PATH` | 可选，本地嵌入模型目录，默认 `server/bge-small-zh-v1.5` |
+| `VECTOR_STORE` | 可选，`milvus`（默认）或 `chroma` 使用旧向量服务 |
+| `CHROMA_PERSIST_DIR` | 仅 `VECTOR_STORE=chroma` 时，Chroma 持久化目录 |
 
 ### 4. 安装并启动后端
 
@@ -152,10 +155,10 @@ EnterpriseQA/
 │   ├── app.py              # 应用入口
 │   ├── config.py           # 配置（MySQL、Chroma、分块等）
 │   ├── routes/             # API 蓝图
-│   ├── services/           # RAG、向量、单例 app_services
+│   ├── services/           # RAG、vector_service_milvus、单例 app_services
 │   ├── models/             # SQLAlchemy 模型
 │   ├── sql/init.sql        # 数据库初始化
-│   ├── chroma_data/        # Chroma 持久化（运行后生成，可配置路径）
+│   ├── bge-small-zh-v1.5/  # 本地嵌入模型
 │   └── uploads/            # 上传文件存储
 ├── initsql/             # 备用 SQL
 └── README.md
@@ -175,7 +178,7 @@ EnterpriseQA/
 ---
 ## 重新向量化已有知识库
 
-修改 `server/config.py` 中的 `CHUNK_SIZE` / `CHUNK_OVERLAP` 后，已有 Chroma 向量不会自动更新。此时可以使用 `server/revectorize_kb.py`，基于数据库中保存的原始文件路径重新切块并写入向量库，无需重新上传文件。
+修改 `server/config.py` 中的 `CHUNK_SIZE` / `CHUNK_OVERLAP` 后，已有 Milvus 向量不会自动更新。此时可以使用 `server/revectorize_kb.py`，基于数据库中保存的原始文件路径重新切块并写入向量库，无需重新上传文件。
 
 建议执行前先停止后端服务，避免上传、删除、问答等操作与向量库重建并发执行。
 
@@ -215,7 +218,7 @@ python revectorize_kb.py --all
 python revectorize_kb.py --kb-id 1 --include-failed
 ```
 
-注意：如果只是修改分块大小，一般无需删除整个 `chroma_data`；脚本会按文档 ID 删除旧向量并重新写入。若同时更换了 embedding 模型且向量维度发生变化，建议先备份并清理对应 Chroma collection 或整个 `chroma_data`，再重新向量化所有相关文档。
+注意：脚本会按文档 ID 删除旧向量并重新写入。若更换了 embedding 模型且向量维度变化，需在 Milvus 中删除对应 `kb_{id}` 集合并重新向量化。
 
 ---
 
@@ -227,8 +230,8 @@ python revectorize_kb.py --kb-id 1 --include-failed
 2. **问答很慢**  
    首次请求需加载嵌入模型与下载权重；后续请求后端使用进程内单例复用模型与 LLM 客户端。可适当减小 `MIMO_MAX_TOKENS` 或使用 GPU 做嵌入。
 
-3. **Chroma / 向量检索报错**  
-   确认已安装 `chromadb` 与 `langchain-chroma`，且 `CHROMA_PERSIST_DIR` 对运行用户可写。
+3. **Milvus / 向量检索报错**  
+   确认 Milvus 已启动、`pip install pymilvus sentence-transformers`，且 `EMBEDDING_MODEL_PATH` 目录完整。
 
 ---
 ## 系统界面

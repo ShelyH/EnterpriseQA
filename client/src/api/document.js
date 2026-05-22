@@ -20,3 +20,8 @@ export function uploadDoc(data) {
 export function deleteDoc(id) {
   return request.delete(`/document/${id}`)
 }
+
+/** 批量删除文档 */
+export function batchDeleteDoc(ids) {
+  return request.post('/document/batch-delete', { ids })
+}

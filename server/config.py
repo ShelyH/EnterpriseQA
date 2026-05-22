@@ -16,9 +16,9 @@ class Config:
     # MySQL数据库配置（端口3308，密码123456）
     MYSQL_HOST = os.environ.get('MYSQL_HOST', '127.0.0.1')
     MYSQL_PORT = int(os.environ.get('MYSQL_PORT', 3306))
-    MYSQL_USER = os.environ.get('MYSQL_USER', 'EQA')
+    MYSQL_USER = os.environ.get('MYSQL_USER', 'root')
     MYSQL_PASSWORD = os.environ.get('MYSQL_PASSWORD', 'mysql')
-    MYSQL_DATABASE = os.environ.get('MYSQL_DATABASE', 'EQA')
+    MYSQL_DATABASE = os.environ.get('MYSQL_DATABASE', 'db_enterprise_qa')
 
     # SQLAlchemy数据库连接URI
     SQLALCHEMY_DATABASE_URI = (
@@ -30,10 +30,23 @@ class Config:
     # JWT Token有效期（秒），默认24小时
     JWT_EXPIRATION = 86400
 
-    # ChromaDB持久化存储路径
+    # 向量库：milvus（默认）或 chroma（VECTOR_STORE=chroma 时使用旧版 vector_service）
+    _SERVER_DIR = os.path.dirname(os.path.abspath(__file__))
+    VECTOR_STORE = os.environ.get('VECTOR_STORE', 'milvus').lower()
+    MILVUS_URI = os.environ.get('MILVUS_URI', 'http://localhost:19530')
+    EMBEDDING_MODEL_PATH = os.environ.get(
+        'EMBEDDING_MODEL_PATH',
+        os.path.join(_SERVER_DIR, 'bge-small-zh-v1.5'),
+    )
+    EMBEDDING_DIM = int(os.environ.get('EMBEDDING_DIM', '512'))
+    MILVUS_INDEX_NLIST = int(os.environ.get('MILVUS_INDEX_NLIST', '128'))
+    MILVUS_SEARCH_NPROBE = int(os.environ.get('MILVUS_SEARCH_NPROBE', '10'))
+    MILVUS_QUERY_BATCH_SIZE = int(os.environ.get('MILVUS_QUERY_BATCH_SIZE', '500'))
+
+    # ChromaDB持久化存储路径（仅 VECTOR_STORE=chroma 时使用）
     CHROMA_PERSIST_DIR = os.environ.get(
         'CHROMA_PERSIST_DIR',
-        os.path.join(os.path.dirname(os.path.abspath(__file__)), 'chroma_data')
+        os.path.join(_SERVER_DIR, 'chroma_data')
     )
 
     # 文件上传配置
@@ -44,33 +57,29 @@ class Config:
     MAX_UPLOAD_FILES_PER_REQUEST = int(os.environ.get('MAX_UPLOAD_FILES_PER_REQUEST', '30'))
 
     # 文档分块配置
-    CHUNK_SIZE = 1000  # 每个分块的字符数
-    CHUNK_OVERLAP = 100  # 分块之间的重叠字符数
+    CHUNK_SIZE = 800  # 每个分块的字符数
+    CHUNK_OVERLAP = 150  # 分块之间的重叠字符数
 
     # SentenceWindowNodeParser（LlamaIndex）：按句切分，向量存「单句」、元数据存「邻句窗口」；
     # RAG 组装上下文时用窗口文本，利于召回精度和上下文完整。设为 true 时忽略 CHUNK_SIZE/OVERLAP。
-    USE_SENTENCE_WINDOW = os.environ.get('USE_SENTENCE_WINDOW', '').lower() in ('1', 'true', 'yes')
+    USE_SENTENCE_WINDOW = os.environ.get('USE_SENTENCE_WINDOW', '1').lower() in ('1', 'true', 'yes')
     SENTENCE_WINDOW_SIZE = int(os.environ.get('SENTENCE_WINDOW_SIZE', '3'))  # 中心句左右各取几句
     SENTENCE_WINDOW_METADATA_KEY = os.environ.get('SENTENCE_WINDOW_METADATA_KEY', 'window')
     # 中文场景建议开启：按 。！？等切句（LlamaIndex 默认分句偏英文标点）
-    SENTENCE_WINDOW_CHINESE_SPLIT = os.environ.get('SENTENCE_WINDOW_CHINESE_SPLIT', 'true').lower() in (
-        '1',
-        'true',
-        'yes',
-    )
+    SENTENCE_WINDOW_CHINESE_SPLIT = os.environ.get('SENTENCE_WINDOW_CHINESE_SPLIT', 'true').lower() in ('1', 'true', 'yes')
 
     # 向量化批处理配置
     EMBED_BATCH_SIZE = 10  # 分块数量
     EMBED_MAX_RETRIES = 3  # 嵌入失败最大重试次数
 
     # RAG检索配置
-    RETRIEVER_TOP_K = 15  # 合并后送入 LLM 的文档块数量上限
+    RETRIEVER_TOP_K = 10  # 合并后送入 LLM 的文档块数量上限
 
     # 混合检索：稠密（向量）+ 稀疏（BM25），环境变量 HYBRID_RETRIEVAL=true 开启
-    HYBRID_RETRIEVAL = os.environ.get('HYBRID_RETRIEVAL', 'true').lower() in ('1', 'true', 'yes')
+    HYBRID_RETRIEVAL = os.environ.get('HYBRID_RETRIEVAL', '').lower() in ('1', 'true', 'yes')
     HYBRID_DENSE_K = int(os.environ.get('HYBRID_DENSE_K', '10'))
     HYBRID_SPARSE_K = int(os.environ.get('HYBRID_SPARSE_K', '10'))
-    # 与 EnsembleRetriever 中 retrievers 顺序一致：[Chroma 向量, BM25]
+    # 与 EnsembleRetriever 中 retrievers 顺序一致：[Milvus/Chroma 向量, BM25]
     _w_dense = float(os.environ.get('HYBRID_WEIGHT_DENSE', '0.6'))
     _w_sparse = float(os.environ.get('HYBRID_WEIGHT_SPARSE', '0.4'))
     HYBRID_ENSEMBLE_WEIGHTS = [_w_dense, _w_sparse]

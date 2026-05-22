@@ -21,3 +21,5 @@ chromadb
 rank-bm25
 python-docx
 pypdf
+pymilvus>=2.4.0
+sentence-transformers>=2.2.0

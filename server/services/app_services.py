@@ -14,9 +14,18 @@ def get_vector_service():
     if _vector_service is None:
         with _lock:
             if _vector_service is None:
-                from services.vector_service import VectorService
+                from flask import current_app
 
-                _vector_service = VectorService()
+                store = current_app.config.get('VECTOR_STORE', 'milvus')
+                if store == 'chroma':
+                    from services.vector_service import VectorService
+
+                    _vector_service = VectorService()
+                else:
+                    from services.vector_service_milvus import MilvusVectorService
+
+                    _vector_service = MilvusVectorService()
+
     return _vector_service
 
 
