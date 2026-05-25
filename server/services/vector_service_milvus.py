@@ -63,6 +63,58 @@ def _chinese_sentence_splitter(text: str) -> List[str]:
     return sentences
 
 
+def _row_to_document(self, row: dict) -> Document:
+    text = row.get("text") or ""
+    meta = {}
+    for key, value in row.items():
+        if key in ("text", "vector", "id", "distance"):
+            continue
+        if value is not None:
+            meta[key] = value
+    return Document(page_content=text, metadata=meta)
+
+
+def _output_fields() -> List[str]:
+    fields = ["text", "doc_id", "file_name", "chunk_index"]
+    window_key = current_app.config.get("SENTENCE_WINDOW_METADATA_KEY", "window")
+    if window_key not in fields:
+        fields.append(window_key)
+    return fields
+
+
+def _sentence_window_chunks(self, text: str):
+    """使用 SentenceWindow 策略将全文切分为句子块及对应上下文窗口。"""
+    from llama_index.core import Document as LIDocument
+    from llama_index.core.node_parser import SentenceWindowNodeParser
+
+    window_size = int(current_app.config.get("SENTENCE_WINDOW_SIZE", 3))
+    window_key = current_app.config.get("SENTENCE_WINDOW_METADATA_KEY", "window")
+    use_zh = current_app.config.get("SENTENCE_WINDOW_CHINESE_SPLIT", True)
+
+    parser_kwargs = {
+        "window_size": max(1, window_size),
+        "window_metadata_key": window_key,
+        "include_prev_next_rel": False,
+    }
+    if use_zh:
+        parser_kwargs["sentence_splitter"] = _chinese_sentence_splitter
+
+    parser = SentenceWindowNodeParser.from_defaults(**parser_kwargs)
+    li_doc = LIDocument(text=text)
+    nodes = parser.get_nodes_from_documents([li_doc])
+
+    chunks, windows = [], []
+    for node in nodes:
+        sentence = (getattr(node, "text", None) or "").strip()
+        if not sentence:
+            continue
+        window_text = node.metadata.get(window_key) or sentence
+        chunks.append(sentence)
+        windows.append(window_text)
+
+    return chunks, windows, window_key
+
+
 class MilvusDenseRetriever(BaseRetriever):
     """LangChain 检索器：Milvus 稠密向量相似度检索。"""
 
@@ -79,9 +131,8 @@ class MilvusDenseRetriever(BaseRetriever):
 
 
 class MilvusVectorService:
-    """基于 Milvus 的文档向量化与检索服务。"""
-
     def __init__(self):
+        """初始化嵌入模型、文本分块器、Milvus 客户端及检索相关缓存。"""
         model_path = current_app.config["EMBEDDING_MODEL_PATH"]
         self.embeddings = SentenceTransformer(model_path)
         self.text_splitter = RecursiveCharacterTextSplitter(
@@ -100,37 +151,114 @@ class MilvusVectorService:
         self._kb_documents_cache: dict = {}
         self._kb_bm25_retriever_cache: dict = {}
 
-    def _encode_documents(self, texts: List[str]) -> List[List[float]]:
-        vectors = self.embeddings.encode(
-            texts, normalize_embeddings=True, show_progress_bar=False
+    def get_retriever(self, kb_id: int):
+        """按配置返回稠密向量检索器或稠密+BM25 混合检索器。"""
+        if current_app.config.get("HYBRID_RETRIEVAL"):
+            return self._get_hybrid_retriever(kb_id)
+        return MilvusDenseRetriever(
+            vector_service=self,
+            kb_id=kb_id,
+            k=current_app.config["RETRIEVER_TOP_K"],
         )
-        return vectors.tolist()
 
-    def _encode_query(self, query: str) -> List[float]:
-        prefixed = f"{query}"
-        vec = self.embeddings.encode(
-            [prefixed], normalize_embeddings=True, show_progress_bar=False
+    def _get_hybrid_retriever(self, kb_id: int):
+        """组装 Milvus 稠密检索与 BM25 稀疏检索的加权融合检索器。"""
+        dense_k = current_app.config.get("HYBRID_DENSE_K", 10)
+        sparse_k = current_app.config.get("HYBRID_SPARSE_K", 10)
+        weights = current_app.config.get("HYBRID_ENSEMBLE_WEIGHTS", [0.7, 0.3])
+
+        dense = MilvusDenseRetriever(
+            vector_service=self, kb_id=kb_id, k=dense_k
         )
-        return vec[0].tolist()
 
-    def _output_fields(self) -> List[str]:
-        fields = ["text", "doc_id", "file_name", "chunk_index"]
-        window_key = current_app.config.get("SENTENCE_WINDOW_METADATA_KEY", "window")
-        if window_key not in fields:
-            fields.append(window_key)
-        return fields
+        # 将知识库加载至内存
+        sparse_docs = self._get_cached_kb_documents(kb_id)
+        if not sparse_docs:
+            return dense
 
-    def _row_to_document(self, row: dict) -> Document:
-        text = row.get("text") or ""
-        meta = {}
-        for key, value in row.items():
-            if key in ("text", "vector", "id", "distance"):
-                continue
-            if value is not None:
-                meta[key] = value
-        return Document(page_content=text, metadata=meta)
+        bm25 = self._kb_bm25_retriever_cache.get(kb_id)
+        if bm25 is None:
+            bm25 = BM25Retriever.from_documents(sparse_docs)
+            self._kb_bm25_retriever_cache[kb_id] = bm25
+        # 返回 top bm25.k (= HYBRID_SPARSE_K) 条
+        bm25.k = sparse_k
+
+        return EnsembleRetriever(
+            retrievers=[dense, bm25],
+            weights=list(weights),
+        )
+
+    def _get_cached_kb_documents(self, kb_id: int) -> List[Document]:
+        """从内存缓存获取知识库全文块，未命中时从 Milvus 加载。"""
+        if kb_id not in self._kb_documents_cache:
+            self._kb_documents_cache[kb_id] = self._load_kb_documents_from_milvus(kb_id)
+
+        return self._kb_documents_cache[kb_id]
+
+    def _load_kb_documents_from_milvus(self, kb_id: int) -> List[Document]:
+        """遍历 Milvus 集合，将全部文本块加载为 LangChain Document 列表。"""
+        collection_name = _get_collection_name(kb_id)
+        if not self.client.has_collection(collection_name):
+            return []
+        self._ensure_collection(kb_id)
+        docs: List[Document] = []
+        output_fields = _output_fields()
+
+        try:
+            iterator = self.client.query_iterator(
+                collection_name=collection_name,
+                batch_size=self._query_batch_size,
+                output_fields=output_fields,
+            )
+            while True:
+                batch = iterator.next()
+                if not batch:
+                    break
+                for row in batch:
+                    if row.get("text"):
+                        docs.append(_row_to_document(row))
+        except Exception:
+            batch = self.client.query(
+                collection_name=collection_name,
+                filter="doc_id >= 0",
+                output_fields=output_fields,
+                limit=16384,
+            )
+            for row in batch:
+                if row.get("text"):
+                    docs.append(_row_to_document(row))
+        return docs
+
+    def search_dense(self, kb_id: int, query: str, k: int) -> List[Document]:
+        """对查询文本做向量编码，在 Milvus 中按相似度返回 top-k 文档块。"""
+        collection_name = self._ensure_collection(kb_id)
+        stats = self.client.get_collection_stats(collection_name)
+        if int(stats.get("row_count", 0)) == 0:
+            return []
+
+        query_vec = self._encode_query(query)
+        results = self.client.search(
+            collection_name=collection_name,
+            data=[query_vec],
+            limit=k,
+            output_fields=_output_fields(),
+            search_params={"metric_type": "IP", "params": {"nprobe": self.nprobe}},
+            anns_field="vector",
+        )
+        docs: List[Document] = []
+        for hits in results:
+            for hit in hits:
+                entity = hit.get("entity") or {}
+                doc = _row_to_document(entity)
+                distance = hit.get("distance")
+                if distance is not None:
+                    doc.metadata["relevance_score"] = float(distance)
+                docs.append(doc)
+
+        return docs
 
     def _ensure_collection(self, kb_id: int) -> str:
+        """确保知识库对应 Milvus 集合已创建、建索引并加载到内存。"""
         collection_name = _get_collection_name(kb_id)
         if not self.client.has_collection(collection_name):
             index_params = self.client.prepare_index_params()
@@ -153,151 +281,11 @@ class MilvusVectorService:
         if collection_name not in self._loaded_collections:
             self.client.load_collection(collection_name)
             self._loaded_collections.add(collection_name)
+
         return collection_name
 
-    def _insert_with_retry(self, collection_name: str, rows: List[dict]) -> None:
-        last_error = None
-        for attempt in range(self.max_retries):
-            try:
-                self.client.insert(collection_name, rows)
-                return
-            except Exception as e:
-                last_error = e
-                if attempt == self.max_retries - 1:
-                    raise
-                wait = 2 ** attempt
-                current_app.logger.warning(
-                    "Milvus 插入失败(第%s次)，%s秒后重试: %s",
-                    attempt + 1,
-                    wait,
-                    e,
-                )
-                time.sleep(wait)
-        raise last_error
-
-    def _sentence_window_chunks(self, text: str):
-        from llama_index.core import Document as LIDocument
-        from llama_index.core.node_parser import SentenceWindowNodeParser
-
-        window_size = int(current_app.config.get("SENTENCE_WINDOW_SIZE", 3))
-        window_key = current_app.config.get("SENTENCE_WINDOW_METADATA_KEY", "window")
-        use_zh = current_app.config.get("SENTENCE_WINDOW_CHINESE_SPLIT", True)
-
-        parser_kwargs = {
-            "window_size": max(1, window_size),
-            "window_metadata_key": window_key,
-            "include_prev_next_rel": False,
-        }
-        if use_zh:
-            parser_kwargs["sentence_splitter"] = _chinese_sentence_splitter
-
-        parser = SentenceWindowNodeParser.from_defaults(**parser_kwargs)
-        li_doc = LIDocument(text=text)
-        nodes = parser.get_nodes_from_documents([li_doc])
-
-        chunks, windows = [], []
-        for node in nodes:
-            sentence = (getattr(node, "text", None) or "").strip()
-            if not sentence:
-                continue
-            window_text = node.metadata.get(window_key) or sentence
-            chunks.append(sentence)
-            windows.append(window_text)
-        return chunks, windows, window_key
-
-    def _invalidate_kb_documents_cache(self, kb_id: int) -> None:
-        self._kb_documents_cache.pop(kb_id, None)
-        self._kb_bm25_retriever_cache.pop(kb_id, None)
-
-    def _load_kb_documents_from_milvus(self, kb_id: int) -> List[Document]:
-        collection_name = _get_collection_name(kb_id)
-        if not self.client.has_collection(collection_name):
-            return []
-        self._ensure_collection(kb_id)
-        docs: List[Document] = []
-        output_fields = self._output_fields()
-
-        try:
-            iterator = self.client.query_iterator(
-                collection_name=collection_name,
-                batch_size=self._query_batch_size,
-                output_fields=output_fields,
-            )
-            while True:
-                batch = iterator.next()
-                if not batch:
-                    break
-                for row in batch:
-                    if row.get("text"):
-                        docs.append(self._row_to_document(row))
-        except Exception:
-            batch = self.client.query(
-                collection_name=collection_name,
-                filter="doc_id >= 0",
-                output_fields=output_fields,
-                limit=16384,
-            )
-            for row in batch:
-                if row.get("text"):
-                    docs.append(self._row_to_document(row))
-        return docs
-
-    def _get_cached_kb_documents(self, kb_id: int) -> List[Document]:
-        if kb_id not in self._kb_documents_cache:
-            self._kb_documents_cache[kb_id] = self._load_kb_documents_from_milvus(kb_id)
-        return self._kb_documents_cache[kb_id]
-
-    def search_dense(self, kb_id: int, query: str, k: int) -> List[Document]:
-        collection_name = self._ensure_collection(kb_id)
-        stats = self.client.get_collection_stats(collection_name)
-        if int(stats.get("row_count", 0)) == 0:
-            return []
-
-        query_vec = self._encode_query(query)
-        results = self.client.search(
-            collection_name=collection_name,
-            data=[query_vec],
-            limit=k,
-            output_fields=self._output_fields(),
-            search_params={"metric_type": "IP", "params": {"nprobe": self.nprobe}},
-            anns_field="vector",
-        )
-        docs: List[Document] = []
-        for hits in results:
-            for hit in hits:
-                entity = hit.get("entity") or {}
-                doc = self._row_to_document(entity)
-                distance = hit.get("distance")
-                if distance is not None:
-                    doc.metadata["relevance_score"] = float(distance)
-                docs.append(doc)
-        return docs
-
-    def _get_hybrid_retriever(self, kb_id: int):
-        dense_k = current_app.config.get("HYBRID_DENSE_K", 10)
-        sparse_k = current_app.config.get("HYBRID_SPARSE_K", 10)
-        weights = current_app.config.get("HYBRID_ENSEMBLE_WEIGHTS", [0.6, 0.4])
-
-        dense = MilvusDenseRetriever(
-            vector_service=self, kb_id=kb_id, k=dense_k
-        )
-
-        sparse_docs = self._get_cached_kb_documents(kb_id)
-        if not sparse_docs:
-            return dense
-
-        bm25 = self._kb_bm25_retriever_cache.get(kb_id)
-        if bm25 is None:
-            bm25 = BM25Retriever.from_documents(sparse_docs)
-            self._kb_bm25_retriever_cache[kb_id] = bm25
-        bm25.k = sparse_k
-
-        return EnsembleRetriever(
-            retrievers=[dense, bm25],
-            weights=list(weights),
-        )
-
     def process_document(self, doc_id: int, file_path: str, file_type: str, kb_id: int, display_file_name: Optional[str] = None, ) -> int:
+        """解析文件、分块、向量化并写入 Milvus，返回生成的块数量。"""
         text = _load_file(file_path, file_type)
         if not text.strip():
             raise ValueError("文档内容为空，无法进行向量化")
@@ -344,7 +332,49 @@ class MilvusVectorService:
         self.client.flush(collection_name)
         return len(chunks)
 
+    def _insert_with_retry(self, collection_name: str, rows: List[dict]) -> None:
+        """向 Milvus 批量插入向量行，失败时按指数退避重试。"""
+        last_error = None
+        for attempt in range(self.max_retries):
+            try:
+                self.client.insert(collection_name, rows)
+                return
+            except Exception as e:
+                last_error = e
+                if attempt == self.max_retries - 1:
+                    raise
+                wait = 2 ** attempt
+                current_app.logger.warning(
+                    "Milvus 插入失败(第%s次)，%s秒后重试: %s",
+                    attempt + 1,
+                    wait,
+                    e,
+                )
+                time.sleep(wait)
+        raise last_error
+
+    def _encode_query(self, query: str) -> List[float]:
+        """将用户查询编码为归一化稠密向量，供相似度检索使用。"""
+        prefixed = f"{query}"
+        vec = self.embeddings.encode(
+            [prefixed], normalize_embeddings=True, show_progress_bar=False
+        )
+        return vec[0].tolist()
+
+    def _encode_documents(self, texts: List[str]) -> List[List[float]]:
+        """将一批文本块批量编码为归一化向量列表。"""
+        vectors = self.embeddings.encode(
+            texts, normalize_embeddings=True, show_progress_bar=False
+        )
+        return vectors.tolist()
+
+    def _invalidate_kb_documents_cache(self, kb_id: int) -> None:
+        """清除指定知识库的文档列表与 BM25 检索器内存缓存。"""
+        self._kb_documents_cache.pop(kb_id, None)
+        self._kb_bm25_retriever_cache.pop(kb_id, None)
+
     def delete_document(self, doc_id: int, kb_id: int) -> None:
+        """按 doc_id 删除 Milvus 中该文档的全部向量块并刷新缓存。"""
         collection_name = _get_collection_name(kb_id)
         if not self.client.has_collection(collection_name):
             return
@@ -354,12 +384,3 @@ class MilvusVectorService:
         )
         self.client.flush(collection_name)
         self._invalidate_kb_documents_cache(kb_id)
-
-    def get_retriever(self, kb_id: int):
-        if current_app.config.get("HYBRID_RETRIEVAL"):
-            return self._get_hybrid_retriever(kb_id)
-        return MilvusDenseRetriever(
-            vector_service=self,
-            kb_id=kb_id,
-            k=current_app.config["RETRIEVER_TOP_K"],
-        )

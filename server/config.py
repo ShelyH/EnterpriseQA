@@ -80,8 +80,8 @@ class Config:
     HYBRID_DENSE_K = int(os.environ.get('HYBRID_DENSE_K', '10'))
     HYBRID_SPARSE_K = int(os.environ.get('HYBRID_SPARSE_K', '10'))
     # 与 EnsembleRetriever 中 retrievers 顺序一致：[Milvus/Chroma 向量, BM25]
-    _w_dense = float(os.environ.get('HYBRID_WEIGHT_DENSE', '0.6'))
-    _w_sparse = float(os.environ.get('HYBRID_WEIGHT_SPARSE', '0.4'))
+    _w_dense = float(os.environ.get('HYBRID_WEIGHT_DENSE', '0.7'))
+    _w_sparse = float(os.environ.get('HYBRID_WEIGHT_SPARSE', '0.3'))
     HYBRID_ENSEMBLE_WEIGHTS = [_w_dense, _w_sparse]
 
     # LLM设置：支持 DeepSeek 或内网 OpenAI 兼容服务（如 vLLM、Ollama、Xinference、FastChat 等）
