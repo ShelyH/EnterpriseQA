@@ -140,6 +140,28 @@ def _doc_content_for_llm(doc):
     return doc.page_content or ''
 
 
+def _format_merged_context(merged_items):
+    """将合并后的文档列表格式化为参考资料 XML。"""
+    formatted = []
+    for i, item in enumerate(merged_items, 1):
+        meta = item['meta']
+        doc_id = meta.get('doc_id', '未知')
+        file_name = meta.get('file_name', '未知来源')
+        if item.get('source_chunk_count', 0) > 1:
+            chunk_index = '合并'
+        else:
+            chunk_index = meta.get('chunk_index', '未知')
+        formatted.append(
+            f"<document index=\"{i}\">\n"
+            f"<doc_id>{doc_id}</doc_id>\n"
+            f"<file_name>{file_name}</file_name>\n"
+            f"<chunk_index>{chunk_index}</chunk_index>\n"
+            f"<content>\n{item['text']}\n</content>\n"
+            f"</document>"
+        )
+    return "\n\n".join(formatted)
+
+
 class RAGService:
     """RAG问答服务类"""
 
@@ -159,32 +181,11 @@ class RAGService:
             ]
         )
 
-    def _format_merged_context(self, merged_items):
-        """将合并后的文档列表格式化为参考资料 XML。"""
-        formatted = []
-        for i, item in enumerate(merged_items, 1):
-            meta = item['meta']
-            doc_id = meta.get('doc_id', '未知')
-            file_name = meta.get('file_name', '未知来源')
-            if item.get('source_chunk_count', 0) > 1:
-                chunk_index = '合并'
-            else:
-                chunk_index = meta.get('chunk_index', '未知')
-            formatted.append(
-                f"<document index=\"{i}\">\n"
-                f"<doc_id>{doc_id}</doc_id>\n"
-                f"<file_name>{file_name}</file_name>\n"
-                f"<chunk_index>{chunk_index}</chunk_index>\n"
-                f"<content>\n{item['text']}\n</content>\n"
-                f"</document>"
-            )
-        return "\n\n".join(formatted)
-
     def _create_rag_chain_merged(self, merged_items):
         """基于合并后的文档构建 RAG 链。"""
         return (
                 {
-                    'context': lambda x: self._format_merged_context(merged_items),
+                    'context': lambda x: _format_merged_context(merged_items),
                     'question': RunnablePassthrough()
                 }
                 | self._prompt

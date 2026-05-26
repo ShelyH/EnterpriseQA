@@ -63,7 +63,7 @@ def _chinese_sentence_splitter(text: str) -> List[str]:
     return sentences
 
 
-def _row_to_document(self, row: dict) -> Document:
+def _row_to_document(row: dict) -> Document:
     text = row.get("text") or ""
     meta = {}
     for key, value in row.items():
@@ -82,7 +82,7 @@ def _output_fields() -> List[str]:
     return fields
 
 
-def _sentence_window_chunks(self, text: str):
+def _sentence_window_chunks(text: str):
     """使用 SentenceWindow 策略将全文切分为句子块及对应上下文窗口。"""
     from llama_index.core import Document as LIDocument
     from llama_index.core.node_parser import SentenceWindowNodeParser
@@ -294,7 +294,7 @@ class MilvusVectorService:
         window_key = current_app.config.get("SENTENCE_WINDOW_METADATA_KEY", "window")
 
         if current_app.config.get("USE_SENTENCE_WINDOW"):
-            chunks, windows, window_key = self._sentence_window_chunks(text)
+            chunks, windows, window_key = _sentence_window_chunks(text)
             if not chunks:
                 raise ValueError("文档分块失败（SentenceWindow）")
             metadatas = [
