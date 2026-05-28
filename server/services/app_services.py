@@ -22,7 +22,7 @@ def get_vector_service():
 
                     _vector_service = VectorService()
                 else:
-                    from services.vector_service_milvus import MilvusVectorService
+                    from services.milvus_vector_service import MilvusVectorService
 
                     _vector_service = MilvusVectorService()
 

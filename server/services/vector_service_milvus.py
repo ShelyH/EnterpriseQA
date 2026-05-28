@@ -291,7 +291,6 @@ class MilvusVectorService:
             raise ValueError("文档内容为空，无法进行向量化")
 
         file_name = display_file_name or os.path.basename(file_path)
-        window_key = current_app.config.get("SENTENCE_WINDOW_METADATA_KEY", "window")
 
         if current_app.config.get("USE_SENTENCE_WINDOW"):
             chunks, windows, window_key = _sentence_window_chunks(text)
